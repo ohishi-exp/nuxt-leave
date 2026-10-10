@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
+  openingGrantRows,
+  SUPERSEDED_LABEL,
+  DAYS_ERROR,
   autoResultMessage,
   BALANCE_NOTE,
   editNotice,
@@ -124,5 +127,28 @@ describe('表示', () => {
 
   it('残の注記', () => {
     expect(BALANCE_NOTE).toContain('近似')
+  })
+})
+
+describe('期首残の表示', () => {
+  it('合成した付与の 2 行 (繰越、今年度の順)', () => {
+    const rows = openingGrantRows({
+      as_of: '2026-10-01',
+      carryover: 3,
+      current: 12.5,
+      carryover_grant_date: '2025-04-01',
+      carryover_expires_on: '2027-04-01',
+      current_grant_date: null,
+      current_expires_on: null,
+    })
+    expect(rows).toEqual([
+      { label: '期首残 (繰越)', grant_date: '2025-04-01', days: 3, expires_on: '2027-04-01' },
+      { label: '期首残 (今年度)', grant_date: null, days: 12.5, expires_on: null },
+    ])
+  })
+
+  it('印の語と日数の誤り文', () => {
+    expect(SUPERSEDED_LABEL).toBe('期首残で置き換え')
+    expect(DAYS_ERROR).toBe('日数は 0〜999.9 (小数 1 桁) で入れてください')
   })
 })

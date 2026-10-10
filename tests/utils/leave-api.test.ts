@@ -140,6 +140,28 @@ describe('エラーの文', () => {
     expect(errorMessage({ status: 400, data: { error: 'something_new' } })).toBe('something_new')
   })
 
+  it('期首残のエラー語', () => {
+    const msg = (c: string) => errorMessage({ status: 400, data: { error: c } })
+    expect(msg('invalid_as_of')).toBe('期首日が正しくありません')
+    expect(msg('invalid_body')).toBe('入力が正しくありません')
+    expect(msg('too_many_rows')).toBe('一度に保存できるのは 1000 人までです')
+    expect(msg('unknown_employee')).toBe('部門外か存在しない乗務員が含まれています')
+    expect(msg('opening_no_prior_grant')).toBe('前年の付与が無いので繰越は入れられません')
+    expect(msg('opening_no_current_grant')).toBe('今年度の付与が無いので今年度分は入れられません')
+  })
+
+  it('listOpening は data を剥がし、saveOpening は PUT', async () => {
+    const { fetcher, calls } = fakeFetcher({ data: [{ employee_cd: '1' }], saved: 1, deleted: 0 })
+    const api = createLeaveApi(fetcher)
+    expect(await api.listOpening()).toEqual([{ employee_cd: '1' }])
+    const body = { as_of: '2026-10-10', rows: [{ employee_cd: '1', carryover: 1, current: null }] }
+    await api.saveOpening(body)
+    expect(calls).toEqual([
+      { url: '/api/proxy/api/leave/opening', options: undefined },
+      { url: '/api/proxy/api/leave/opening', options: { method: 'PUT', body } },
+    ])
+  })
+
   it('data.message → message → 既定の文の順', () => {
     expect(errorMessage({ data: { message: 'm1' }, message: 'm2' })).toBe('m1')
     expect(errorMessage({ data: null, message: 'm2' })).toBe('m2')
