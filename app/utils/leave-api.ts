@@ -114,6 +114,99 @@ export interface NotifyRecipient {
   enabled: boolean
 }
 
+/** カレンダーの 1 日の状態 (back の reconcile::day_status) */
+export type DayStatus = 'match' | 'ichiban_only' | 'pdf_only' | 'mismatch'
+
+export interface CalendarIchibanEntry {
+  kind: PeriodKind
+  half: Half | null
+}
+
+export interface CalendarPdfEntry {
+  kind: PeriodKind
+  half: Half | null
+  page_id: string
+}
+
+/** 「何かある日」だけが返る (勤務日は含まれない) */
+export interface CalendarDay {
+  date: string
+  ichiban: CalendarIchibanEntry[]
+  pdf: CalendarPdfEntry[]
+  status: DayStatus
+}
+
+export interface CalendarResponse {
+  employee_cd: string
+  employee_name: string | null
+  month: string
+  days: CalendarDay[]
+  yukyu: {
+    as_of: string
+    remaining: number
+    expired: number
+    unallocated: number
+    consumption_from: string
+  }
+  rousai: { year: number, month: number }
+  unknown_items: number
+}
+
+export type GrantSource = 'auto' | 'manual'
+
+/** 付与台帳の 1 行 (一覧の応答。POST / PUT の応答には used / remaining / expired が無い) */
+export interface LeaveGrant {
+  id: string
+  employee_cd: string
+  grant_date: string
+  days: number
+  expires_on: string
+  source: GrantSource
+  note: string | null
+  created_at: string
+  updated_at: string
+  used?: number
+  remaining?: number
+  expired?: number
+}
+
+export interface GrantBalance {
+  as_of: string
+  remaining: number
+  expired: number
+  unallocated: number
+  consumption_from: string
+}
+
+export interface GrantsResponse {
+  employee_cd: string
+  employee_name: string | null
+  hire_date: string | null
+  balance: GrantBalance
+  data: LeaveGrant[]
+}
+
+export interface GrantCreateBody {
+  employee_cd: string
+  grant_date: string
+  days: number
+  expires_on: string | null
+  note: string | null
+}
+
+export interface GrantUpdateBody {
+  days: number
+  expires_on: string
+  note: string | null
+}
+
+export interface AutoGrantsResponse {
+  employee_cd: string
+  hire_date: string | null
+  inserted: number
+  computed: { grant_date: string, days: number, expires_on: string }[]
+}
+
 export interface FetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   body?: unknown
@@ -141,6 +234,10 @@ export function pageUrl(id: string): string {
 
 export function pagePdfUrl(id: string): string {
   return `${pageUrl(id)}/pdf`
+}
+
+export function grantUrl(id: string): string {
+  return `${API_BASE}/leave/grants/${encodeURIComponent(id)}`
 }
 
 export function botConfigUrl(id: string): string {
@@ -171,6 +268,29 @@ export function createLeaveApi(fetcher: Fetcher) {
     async listDepartments(): Promise<Department[]> {
       const r = await fetcher<{ data: Department[] }>(`${API_BASE}/leave/departments`)
       return r.data
+    },
+    getCalendar(employeeCd: string, month: string): Promise<CalendarResponse> {
+      return fetcher<CalendarResponse>(`${API_BASE}/leave/calendar`, {
+        query: { employee_cd: employeeCd, month },
+      })
+    },
+    listGrants(employeeCd: string): Promise<GrantsResponse> {
+      return fetcher<GrantsResponse>(`${API_BASE}/leave/grants`, { query: { employee_cd: employeeCd } })
+    },
+    createGrant(body: GrantCreateBody): Promise<LeaveGrant> {
+      return fetcher<LeaveGrant>(`${API_BASE}/leave/grants`, { method: 'POST', body })
+    },
+    updateGrant(id: string, body: GrantUpdateBody): Promise<LeaveGrant> {
+      return fetcher<LeaveGrant>(grantUrl(id), { method: 'PUT', body })
+    },
+    deleteGrant(id: string): Promise<unknown> {
+      return fetcher(grantUrl(id), { method: 'DELETE' })
+    },
+    autoGrants(employeeCd: string): Promise<AutoGrantsResponse> {
+      return fetcher<AutoGrantsResponse>(`${API_BASE}/leave/grants/auto`, {
+        method: 'POST',
+        query: { employee_cd: employeeCd },
+      })
     },
     getSettings(): Promise<LeaveSettings> {
       return fetcher<LeaveSettings>(`${API_BASE}/leave/settings`)
@@ -231,6 +351,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   ichiban_upstream: '一番星から社員・部門を読めませんでした',
   ichiban_unavailable: '一番星から社員・部門を読めませんでした',
   ichiban_bad_response: '一番星の応答が読めませんでした',
+  invalid_month: '月の形が正しくありません',
+  grant_exists: '同じ付与日の行があります',
+  invalid_days: '日数は 0〜999.9 (小数 1 桁) で入れてください',
+  invalid_grant_date: '付与日が正しくありません',
+  expires_before_grant: '期限が付与日より前です',
   not_found: '見つかりません',
   pdf_not_found: 'PDF が見つかりません',
   internal_error: 'サーバーでエラーが起きました',

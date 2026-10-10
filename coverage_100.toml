@@ -31,3 +31,11 @@ branches = true
 [[files]]
 path = "app/utils/pages-list.ts"
 branches = true
+
+[[files]]
+path = "app/utils/calendar.ts"
+branches = true
+
+[[files]]
+path = "app/utils/grants.ts"
+branches = true
