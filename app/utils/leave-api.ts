@@ -186,6 +186,9 @@ export function createLeaveApi(fetcher: Fetcher) {
     deleteBotConfig(id: string): Promise<unknown> {
       return fetcher(botConfigUrl(id), { method: 'DELETE' })
     },
+    testNotify(): Promise<unknown> {
+      return fetcher(`${API_BASE}/leave/settings/test-notify`, { method: 'POST' })
+    },
     listChannels(): Promise<LineworksChannel[]> {
       return fetcher<LineworksChannel[]>(`${API_BASE}/notify/lineworks/channels`)
     },
@@ -217,6 +220,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   unknown_lineworks_channel: '通知先グループが見つかりません',
   unknown_notify_recipient: '選んだ個人が見つかりません',
   both_notify_targets: '通知先は 1 つだけ選んでください',
+  no_notify_target: '通知先が保存されていません',
+  notify_failed: '送信に失敗しました',
+  notify_unavailable: 'この環境では送れません',
   ichiban_not_configured: '一番星につながっていません (この環境では社員・部門を読めません)',
   ichiban_upstream: '一番星から社員・部門を読めませんでした',
   ichiban_unavailable: '一番星から社員・部門を読めませんでした',

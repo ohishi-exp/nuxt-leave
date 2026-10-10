@@ -9,7 +9,10 @@ import {
   normalizeMailbox,
   notifyTargetFromSettings,
   notifyTargetToSettings,
+  hasSavedNotifyTarget,
+  hasUnsavedChanges,
   parseSenders,
+  testNotifyBlocker,
   recipientTarget,
   settingsToForm,
   validateSettingsForm,
@@ -177,5 +180,47 @@ describe('validateSettingsForm', () => {
     expect(validateSettingsForm({ ...ok, grace_days: -1 })).toHaveLength(1)
     expect(validateSettingsForm({ ...ok, grace_days: 1.5 })).toHaveLength(1)
     expect(validateSettingsForm({ ...ok, grace_days: 0 })).toEqual([])
+  })
+})
+
+describe('テスト送信の判定', () => {
+  const saved: SettingsForm = {
+    mailbox: 'ohishi',
+    allowedSendersText: 'a@x.example\nb@x.example',
+    dept_codes: ['1', '2'],
+    notify_target: 'channel:c1',
+    grace_days: 7,
+    enabled: true,
+  }
+
+  it('保存済みと同じなら変更なし (並び・大文字・重複は無視)', () => {
+    expect(hasUnsavedChanges(saved, { ...saved })).toBe(false)
+    expect(hasUnsavedChanges(saved, {
+      ...saved,
+      mailbox: ' OHISHI ',
+      allowedSendersText: 'B@x.example, a@x.example, a@x.example',
+      dept_codes: ['2', '1', '1'],
+    })).toBe(false)
+  })
+
+  it('1 項目でも違えば未保存の変更', () => {
+    expect(hasUnsavedChanges(saved, { ...saved, notify_target: 'recipient:r1' })).toBe(true)
+    expect(hasUnsavedChanges(saved, { ...saved, grace_days: 8 })).toBe(true)
+    expect(hasUnsavedChanges(saved, { ...saved, dept_codes: ['1'] })).toBe(true)
+  })
+
+  it('保存済みの通知先の有無', () => {
+    expect(hasSavedNotifyTarget(saved)).toBe(true)
+    expect(hasSavedNotifyTarget({ ...saved, notify_target: '' })).toBe(false)
+  })
+
+  it('押せる / 押せない', () => {
+    expect(testNotifyBlocker(saved, { ...saved })).toBeNull()
+    expect(testNotifyBlocker(saved, { ...saved, notify_target: 'channel:c2' })).toBe('unsaved')
+    const none = { ...saved, notify_target: '' }
+    expect(testNotifyBlocker(none, { ...none })).toBe('no_target')
+    // 保存済みが「通知しない」のとき、フォームだけ選んでも押せない
+    expect(testNotifyBlocker(none, saved)).toBe('no_target')
+    expect(testNotifyBlocker(null, saved)).toBe('no_target')
   })
 })
