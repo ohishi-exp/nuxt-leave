@@ -1,0 +1,33 @@
+# Lines 100% + Branches 100% 達成ファイル登録簿
+# CI でリグレッションを検出する
+# 方針 (nuxt-dtako-admin と同じ):
+# - UI ページ (.vue) は登録しない。gate は pure ロジック (app/utils / middleware) だけ。
+# - 分岐数などの手書き注記をこのファイルに書かない。
+
+[[files]]
+path = "app/middleware/auth.global.ts"
+branches = true
+
+[[files]]
+path = "app/utils/leave-api.ts"
+branches = true
+
+[[files]]
+path = "app/utils/leave-periods.ts"
+branches = true
+
+[[files]]
+path = "app/utils/employees.ts"
+branches = true
+
+[[files]]
+path = "app/utils/leave-settings.ts"
+branches = true
+
+[[files]]
+path = "app/utils/bot-config.ts"
+branches = true
+
+[[files]]
+path = "app/utils/pages-list.ts"
+branches = true

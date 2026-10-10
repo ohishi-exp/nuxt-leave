@@ -1,0 +1,90 @@
+name = "nuxt-leave"
+account_id = "24b45709d060d957340180e995f0d373"
+main = "./.output/server/index.mjs"
+compatibility_date = "2025-07-15"
+compatibility_flags = ["nodejs_compat"]
+assets = { directory = ".output/public/", binding = "ASSETS" }
+# release tag の `wrangler versions upload` (no-traffic) が version ごとの preview URL を
+# 出すよう opt-in する (frontend-ci の pending-release 報告が使う。nuxt-dtako-admin と同じ)。
+preview_urls = true
+
+[build]
+command = "npm run build"
+
+[observability]
+enabled = true
+
+# 同じホスト名で勤怠申請メールの受信 (MX) も使うが、Worker の custom domain と共存できる。
+[[routes]]
+pattern = "leave.ippoan.org"
+custom_domain = true
+
+# /api/proxy/* が auth-worker /alc-proxy に渡す consumer proof。
+# nuxt-dtako-admin と同じ CF Secrets Store entry を物理共有する。
+# **binding 名に NUXT_PUBLIC_ を付けない** (Nitro の runtimeConfig 自動上書きが
+# binding オブジェクトを突っ込み、起動時の deepFreeze で crash する)。
+[[secrets_store_secrets]]
+binding = "INTERNAL_SHARED_SECRET"
+store_id = "bd7bc91a3e5f4111add4acf6cb4b8733"
+secret_name = "INTERNAL_SHARED_SECRET"
+
+# /api/proxy は公開 HTTP ではなく service binding で auth-worker を叩く。
+[[services]]
+binding = "AUTH_WORKER"
+service = "auth-worker"
+
+[vars]
+NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth.ippoan.org"
+
+# secret-verify (frontend-ci) 用の明示宣言。**必ず空 `[]` にする**。
+# INTERNAL_SHARED_SECRET をここに書くと secrets_store_secrets と同名衝突で
+# wrangler deploy が落ちる (nuxt-dtako-admin の wrangler.toml と同じ罠)。
+[secrets]
+required = []
+
+# named env は top-level の binding / vars / secrets を継承しないので env ごとに再宣言する。
+[env.staging]
+name = "nuxt-leave-staging"
+
+[[env.staging.routes]]
+pattern = "leave-staging.ippoan.org"
+custom_domain = true
+
+[[env.staging.secrets_store_secrets]]
+binding = "INTERNAL_SHARED_SECRET"
+store_id = "bd7bc91a3e5f4111add4acf6cb4b8733"
+secret_name = "INTERNAL_SHARED_SECRET"
+
+[[env.staging.services]]
+binding = "AUTH_WORKER"
+service = "auth-worker-staging"
+
+[env.staging.vars]
+NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth-staging.ippoan.org"
+
+[env.staging.secrets]
+required = []
+
+# 軽量プレビュー (main 以外の branch への push ごとに deploy)。backend は staging を再利用する。
+[env.preview]
+name = "nuxt-leave-preview"
+workers_dev = false
+
+[[env.preview.routes]]
+pattern = "leave-preview.ippoan.org"
+custom_domain = true
+
+[[env.preview.secrets_store_secrets]]
+binding = "INTERNAL_SHARED_SECRET"
+store_id = "bd7bc91a3e5f4111add4acf6cb4b8733"
+secret_name = "INTERNAL_SHARED_SECRET"
+
+[[env.preview.services]]
+binding = "AUTH_WORKER"
+service = "auth-worker-staging"
+
+[env.preview.vars]
+NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth-staging.ippoan.org"
+
+[env.preview.secrets]
+required = []

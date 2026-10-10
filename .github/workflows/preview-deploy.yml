@@ -1,0 +1,24 @@
+name: Preview Deploy
+
+# push するだけで見た目を確かめられる軽量プレビュー (test/typecheck は回さない)。
+# backend は staging を再利用する (wrangler.toml の [env.preview])。
+# エージェントは preview を見られない (auth-staging の Google ログインを代行できない) —
+# 見に行かず PR を先に作ること (nuxt-dtako-admin と同じ方針)。
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  preview:
+    uses: ippoan/ci-workflows/.github/workflows/preview-deploy.yml@main
+    with:
+      install_command: 'npm install'
+      post_install_script: 'npx nuxt prepare'
+      # wrangler.toml の `[build] command` が build するので `npm run build` を重ねない
+      preview_deploy_script: 'npx wrangler deploy --env preview'
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
