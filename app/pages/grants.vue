@@ -7,7 +7,9 @@ import {
   emptyGrantForm,
   formatDays,
   grantFormFromGrant,
+  openingGrantRows,
   sourceLabel,
+  SUPERSEDED_LABEL,
   toCreateBody,
   toUpdateBody,
   validateGrantForm,
@@ -225,14 +227,33 @@ onMounted(load)
               </tr>
             </thead>
             <tbody>
-              <tr v-if="data.data.length === 0">
+              <template v-if="data.opening">
+                <tr
+                  v-for="o in openingGrantRows(data.opening)"
+                  :key="o.label"
+                  class="border-t border-(--ui-border) bg-(--ui-bg-elevated)/40"
+                >
+                  <td class="whitespace-nowrap px-3 py-2">{{ o.grant_date ?? '—' }}</td>
+                  <td class="px-3 py-2 text-right">{{ formatDays(o.days) }}</td>
+                  <td class="whitespace-nowrap px-3 py-2">{{ o.expires_on ?? '—' }}</td>
+                  <td class="px-3 py-2"><UBadge :label="o.label" variant="subtle" color="warning" /></td>
+                  <td class="px-3 py-2 text-right">—</td>
+                  <td class="px-3 py-2 text-right">—</td>
+                  <td class="px-3 py-2 text-right">—</td>
+                  <td class="px-3 py-2 text-(--ui-text-muted)">{{ data.opening.as_of }} 時点の残 (期首残)</td>
+                  <td class="px-3 py-2" />
+                </tr>
+              </template>
+              <tr v-if="data.data.length === 0 && !data.opening">
                 <td colspan="9" class="px-3 py-6 text-center text-(--ui-text-muted)">付与がありません</td>
               </tr>
-              <tr v-for="g in data.data" :key="g.id" class="border-t border-(--ui-border)">
+              <tr v-for="g in data.data" :key="g.id" class="border-t border-(--ui-border)" :class="{ 'opacity-60': g.superseded }">
                 <td class="whitespace-nowrap px-3 py-2">{{ g.grant_date }}</td>
                 <td class="px-3 py-2 text-right">{{ formatDays(g.days) }}</td>
                 <td class="whitespace-nowrap px-3 py-2">{{ g.expires_on }}</td>
-                <td class="px-3 py-2"><UBadge :label="sourceLabel(g.source)" variant="subtle" :color="g.source === 'auto' ? 'neutral' : 'primary'" /></td>
+                <td class="px-3 py-2"><UBadge :label="sourceLabel(g.source)" variant="subtle" :color="g.source === 'auto' ? 'neutral' : 'primary'" />
+                  <UBadge v-if="g.superseded" :label="SUPERSEDED_LABEL" variant="outline" color="warning" class="ml-1" />
+                </td>
                 <td class="px-3 py-2 text-right">{{ formatDays(g.used ?? 0) }}</td>
                 <td class="px-3 py-2 text-right">{{ formatDays(g.remaining ?? 0) }}</td>
                 <td class="px-3 py-2 text-right">{{ formatDays(g.expired ?? 0) }}</td>

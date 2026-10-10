@@ -8,6 +8,7 @@ import type {
   GrantCreateBody,
   GrantSource,
   GrantUpdateBody,
+  GrantsOpening,
   LeaveGrant,
 } from './leave-api'
 
@@ -43,6 +44,8 @@ export function isDate(v: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v
 }
 
+export const DAYS_ERROR = '日数は 0〜999.9 (小数 1 桁) で入れてください'
+
 const DAYS_RE = /^\d{1,3}(\.\d)?$/
 
 /** 日数の入力を数にする (0〜999.9、小数 1 桁まで。ダメなら null) */
@@ -60,7 +63,7 @@ export function formatDays(n: number): string {
 export function validateGrantForm(form: GrantForm, mode: 'create' | 'update'): string[] {
   const errors: string[] = []
   if (mode === 'create' && !isDate(form.grant_date)) errors.push('付与日を入れてください')
-  if (parseDays(form.days) === null) errors.push('日数は 0〜999.9 (小数 1 桁) で入れてください')
+  if (parseDays(form.days) === null) errors.push(DAYS_ERROR)
   const exp = form.expires_on.trim()
   if (mode === 'update' && exp === '') errors.push('期限を入れてください')
   if (exp !== '' && !isDate(exp)) errors.push('期限が正しい日付ではありません')
@@ -119,3 +122,20 @@ export function autoResultMessage(r: Pick<AutoGrantsResponse, 'hire_date' | 'ins
 
 export const BALANCE_NOTE
   = '残は近似です。一番星の休暇を基準日から 48 か月前までさかのぼって先に付いた付与から引いて数えています (入社日より前は数えません)。'
+
+export const SUPERSEDED_LABEL = '期首残で置き換え'
+
+/** 期首残から合成した付与の表示行 (一覧の先頭に出す。日付が無ければ null) */
+export interface OpeningGrantRow {
+  label: string
+  grant_date: string | null
+  days: number
+  expires_on: string | null
+}
+
+export function openingGrantRows(o: GrantsOpening): OpeningGrantRow[] {
+  return [
+    { label: '期首残 (繰越)', grant_date: o.carryover_grant_date, days: o.carryover, expires_on: o.carryover_expires_on },
+    { label: '期首残 (今年度)', grant_date: o.current_grant_date, days: o.current, expires_on: o.current_expires_on },
+  ]
+}

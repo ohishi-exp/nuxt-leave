@@ -168,6 +168,19 @@ export interface LeaveGrant {
   used?: number
   remaining?: number
   expired?: number
+  /** 期首残があり付与日が期首日以前 (計算から外れている)。一覧の応答だけに付く */
+  superseded?: boolean
+}
+
+/** 期首残から合成した付与 2 件 (繰越は前年の付与、今年度は直近の付与。0 日でも付く) */
+export interface GrantsOpening {
+  as_of: string
+  carryover: number
+  current: number
+  carryover_grant_date: string | null
+  carryover_expires_on: string | null
+  current_grant_date: string | null
+  current_expires_on: string | null
 }
 
 export interface GrantBalance {
@@ -183,7 +196,42 @@ export interface GrantsResponse {
   employee_name: string | null
   hire_date: string | null
   balance: GrantBalance
+  opening: GrantsOpening | null
   data: LeaveGrant[]
+}
+
+/** 期首残の保存値 (期首日 `as_of` 時点の、前年からの繰越と今年度の付与の残) */
+export interface OpeningValue {
+  as_of: string
+  carryover: number
+  current: number
+}
+
+/** 期首残の一覧の 1 行 (乗務員は tenant の部門で絞った一番星の一覧) */
+export interface OpeningRow {
+  employee_cd: string
+  employee_name: string | null
+  dept_code: string | number | null
+  hire_date: string | null
+  retire_date: string | null
+  opening: OpeningValue | null
+}
+
+/** 保存の 1 行 (両方 null = 削除、片方 null は 0) */
+export interface OpeningPutRow {
+  employee_cd: string
+  carryover: number | null
+  current: number | null
+}
+
+export interface OpeningPutBody {
+  as_of: string
+  rows: OpeningPutRow[]
+}
+
+export interface OpeningPutResponse {
+  saved: number
+  deleted: number
 }
 
 export interface GrantCreateBody {
@@ -292,6 +340,13 @@ export function createLeaveApi(fetcher: Fetcher) {
         query: { employee_cd: employeeCd },
       })
     },
+    async listOpening(): Promise<OpeningRow[]> {
+      const r = await fetcher<{ data: OpeningRow[] }>(`${API_BASE}/leave/opening`)
+      return r.data
+    },
+    saveOpening(body: OpeningPutBody): Promise<OpeningPutResponse> {
+      return fetcher<OpeningPutResponse>(`${API_BASE}/leave/opening`, { method: 'PUT', body })
+    },
     getSettings(): Promise<LeaveSettings> {
       return fetcher<LeaveSettings>(`${API_BASE}/leave/settings`)
     },
@@ -324,7 +379,7 @@ export type LeaveApi = ReturnType<typeof createLeaveApi>
 
 /** back が返すエラーの語 (`{"error":"..."}`) を画面の文にする */
 const ERROR_MESSAGES: Record<string, string> = {
-  invalid_body: '送った内容の形が正しくありません',
+  invalid_body: '入力が正しくありません',
   invalid_query: '一覧の条件が正しくありません',
   invalid_status: '状態の値が正しくありません',
   invalid_kind: '区分の値が正しくありません',
@@ -356,6 +411,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_days: '日数は 0〜999.9 (小数 1 桁) で入れてください',
   invalid_grant_date: '付与日が正しくありません',
   expires_before_grant: '期限が付与日より前です',
+  invalid_as_of: '期首日が正しくありません',
+  too_many_rows: '一度に保存できるのは 1000 人までです',
+  unknown_employee: '部門外か存在しない乗務員が含まれています',
+  opening_no_prior_grant: '前年の付与が無いので繰越は入れられません',
+  opening_no_current_grant: '今年度の付与が無いので今年度分は入れられません',
   not_found: '見つかりません',
   pdf_not_found: 'PDF が見つかりません',
   internal_error: 'サーバーでエラーが起きました',

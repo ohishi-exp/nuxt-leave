@@ -39,3 +39,7 @@ branches = true
 [[files]]
 path = "app/utils/grants.ts"
 branches = true
+
+[[files]]
+path = "app/utils/opening.ts"
+branches = true
