@@ -11,6 +11,7 @@ import {
   pagePdfUrl,
   pageUrl,
   botConfigUrl,
+  grantUrl,
   type Fetcher,
 } from '~/utils/leave-api'
 
@@ -149,5 +150,64 @@ describe('エラーの文', () => {
   it('object でなければ文字列化', () => {
     expect(errorMessage('boom')).toBe('boom')
     expect(errorMessage(undefined)).toBe('undefined')
+  })
+})
+
+describe('カレンダーと付与台帳', () => {
+  it('grantUrl は id を encode する', () => {
+    expect(grantUrl('a/b')).toBe('/api/proxy/api/leave/grants/a%2Fb')
+  })
+
+  it('getCalendar は employee_cd と month を query で渡す', async () => {
+    const { fetcher, calls } = fakeFetcher({ days: [] })
+    const r = await createLeaveApi(fetcher).getCalendar('101', '2026-02')
+    expect(r).toEqual({ days: [] })
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/calendar',
+      options: { query: { employee_cd: '101', month: '2026-02' } },
+    })
+  })
+
+  it('listGrants は employee_cd を query で渡す', async () => {
+    const { fetcher, calls } = fakeFetcher({ data: [] })
+    await createLeaveApi(fetcher).listGrants('101')
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/grants',
+      options: { query: { employee_cd: '101' } },
+    })
+  })
+
+  it('createGrant は POST、updateGrant は PUT、deleteGrant は DELETE', async () => {
+    const { fetcher, calls } = fakeFetcher({ id: 'g1' })
+    const api = createLeaveApi(fetcher)
+    const body = { employee_cd: '101', grant_date: '2026-04-01', days: 10, expires_on: null, note: null }
+    await api.createGrant(body)
+    await api.updateGrant('g 1', { days: 5, expires_on: '2028-04-01', note: null })
+    await api.deleteGrant('g1')
+    expect(calls[0]).toEqual({ url: '/api/proxy/api/leave/grants', options: { method: 'POST', body } })
+    expect(calls[1]).toEqual({
+      url: '/api/proxy/api/leave/grants/g%201',
+      options: { method: 'PUT', body: { days: 5, expires_on: '2028-04-01', note: null } },
+    })
+    expect(calls[2]).toEqual({ url: '/api/proxy/api/leave/grants/g1', options: { method: 'DELETE' } })
+  })
+
+  it('autoGrants は POST で employee_cd を query に', async () => {
+    const { fetcher, calls } = fakeFetcher({ inserted: 2 })
+    const r = await createLeaveApi(fetcher).autoGrants('101')
+    expect(r).toEqual({ inserted: 2 })
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/grants/auto',
+      options: { method: 'POST', query: { employee_cd: '101' } },
+    })
+  })
+
+  it('追加したエラーの語は日本語になる', () => {
+    const msg = (error: string) => errorMessage({ status: 400, data: { error } })
+    expect(msg('invalid_month')).toBe('月の形が正しくありません')
+    expect(msg('grant_exists')).toBe('同じ付与日の行があります')
+    expect(msg('invalid_days')).toBe('日数は 0〜999.9 (小数 1 桁) で入れてください')
+    expect(msg('invalid_grant_date')).toBe('付与日が正しくありません')
+    expect(msg('expires_before_grant')).toBe('期限が付与日より前です')
   })
 })
