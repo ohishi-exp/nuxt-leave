@@ -17,7 +17,6 @@ const filled: BotForm = {
   bot_id: ' 123 ',
   enabled: true,
   client_secret: ' sec ',
-  private_key: '\npem-line-1\npem-line-2\n',
   bot_secret: ' bs ',
 }
 
@@ -25,7 +24,7 @@ describe('フォーム', () => {
   it('空のフォームは有効・全部空', () => {
     expect(emptyBotForm()).toEqual({
       id: '', name: '', client_id: '', service_account: '', bot_id: '', enabled: true,
-      client_secret: '', private_key: '', bot_secret: '',
+      client_secret: '', bot_secret: '',
     })
   })
 
@@ -34,26 +33,30 @@ describe('フォーム', () => {
       id: 'b1', provider: 'lineworks', name: 'n', client_id: 'c', service_account: 's', bot_id: '9', enabled: false,
     })).toEqual({
       id: 'b1', name: 'n', client_id: 'c', service_account: 's', bot_id: '9', enabled: false,
-      client_secret: '', private_key: '', bot_secret: '',
+      client_secret: '', bot_secret: '',
     })
   })
 })
 
 describe('validateBotForm', () => {
-  it('新規は必須 4 項目と秘密値 2 つ', () => {
+  it('新規は必須 4 項目と Client Secret', () => {
     expect(validateBotForm(emptyBotForm())).toEqual([
       '名前 を入れてください',
       'Client ID を入れてください',
       'Service Account を入れてください',
       'Bot ID を入れてください',
       'Client Secret を入れてください',
-      'Private Key を入れてください',
     ])
     expect(validateBotForm(filled)).toEqual([])
   })
 
+  it('新規は鍵の欄が無くても Bot ID・Bot Secret・Client ID・Client Secret・Service Account で通る', () => {
+    expect(Object.keys(emptyBotForm())).not.toContain('private_key')
+    expect(validateBotForm({ ...filled, bot_secret: '' })).toEqual([])
+  })
+
   it('編集は秘密値が空でよい', () => {
-    expect(validateBotForm({ ...filled, id: 'b1', client_secret: '', private_key: '', bot_secret: '' })).toEqual([])
+    expect(validateBotForm({ ...filled, id: 'b1', client_secret: '', bot_secret: '' })).toEqual([])
   })
 })
 
@@ -67,13 +70,12 @@ describe('toBotConfigBody', () => {
       bot_id: '123',
       enabled: true,
       client_secret: 'sec',
-      private_key: 'pem-line-1\npem-line-2',
       bot_secret: 'bs',
     })
   })
 
   it('編集: 空の秘密値は載せない (据え置き)', () => {
-    const body = toBotConfigBody({ ...filled, id: 'b1', client_secret: ' ', private_key: '', bot_secret: '' })
+    const body = toBotConfigBody({ ...filled, id: 'b1', client_secret: ' ', bot_secret: '' })
     expect(body).toEqual({
       id: 'b1',
       provider: 'lineworks',
@@ -83,6 +85,13 @@ describe('toBotConfigBody', () => {
       bot_id: '123',
       enabled: true,
     })
+  })
+})
+
+describe('body に鍵を載せない', () => {
+  it('新規でも編集でも private_key キーが無い', () => {
+    expect(toBotConfigBody(filled)).not.toHaveProperty('private_key')
+    expect(toBotConfigBody({ ...filled, id: 'b1' })).not.toHaveProperty('private_key')
   })
 })
 
