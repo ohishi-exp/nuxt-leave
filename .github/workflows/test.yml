@@ -24,8 +24,13 @@ jobs:
       # `npm run build` を重ねない (重ねると nuxt build が二重に走る)。
       deploy_staging_script: 'npx wrangler deploy --env staging'
       deploy_release_script: 'npx wrangler deploy'
-      # staging deploy を build/upload + 自動 flip の 2 段に分ける (ippoan/ci-workflows#159)
-      staging_no_traffic: true
+      # no-traffic (`wrangler versions upload` + flip) は **既存 Worker 前提**で、初回の
+      # deploy をブートストラップできない ("You cannot upload a new version of a Worker that
+      # does not yet exist")。nuxt-leave-staging / nuxt-leave はまだ無いので、どちらも false にして
+      # plain `wrangler deploy` で作る (ippoan/email-receiver の test.yml の release_no_traffic と同じ理由)。
+      # 初回の Worker ができた後に true へ戻すかは別に判断する。
+      staging_no_traffic: false
+      release_no_traffic: false
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       # cross-org (ohishi-exp → ippoan/ci-workflows) は secrets: inherit が効かないため明示渡し
