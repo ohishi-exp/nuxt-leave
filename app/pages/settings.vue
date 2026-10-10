@@ -9,6 +9,7 @@ import {
   formToSettingsBody,
   mailboxAddress,
   mailboxError,
+  notifyBotOptions,
   recipientTarget,
   settingsToForm,
   testNotifyBlocker,
@@ -37,6 +38,7 @@ const form = ref<SettingsForm>({
   allowedSendersText: '',
   dept_codes: [],
   notify_target: '',
+  notify_bot_config_id: '',
   grace_days: DEFAULT_GRACE_DAYS,
   enabled: false,
 })
@@ -64,6 +66,8 @@ const testResult = ref<{ ok: boolean, message: string } | null>(null)
 
 const address = computed(() => mailboxAddress(form.value.mailbox))
 const mailboxMsg = computed(() => mailboxError(form.value.mailbox))
+const isRecipientTarget = computed(() => form.value.notify_target.startsWith('recipient:'))
+const botOptions = computed(() => notifyBotOptions(bots.value))
 const testBlocker = computed(() => testNotifyBlocker(saved.value, form.value))
 
 async function loadSettings() {
@@ -315,6 +319,14 @@ onMounted(() => {
                 <option v-for="r in recipients" :key="r.id" :value="recipientTarget(r.id)">{{ recipientLabel(r) }}</option>
               </optgroup>
             </select>
+            <div v-if="isRecipientTarget" class="mt-3">
+              <UFormField label="送る bot" required description="個人宛てはこの bot から届きます。">
+                <select v-model="form.notify_bot_config_id" class="w-full max-w-md rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1">
+                  <option value="">選んでください</option>
+                  <option v-for="b in botOptions" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </select>
+              </UFormField>
+            </div>
             <div class="mt-2 flex items-center gap-3">
               <UButton
                 label="テスト送信"

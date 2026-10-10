@@ -7,6 +7,8 @@ import {
   mailboxAddress,
   mailboxError,
   normalizeMailbox,
+  notifyBotOptions,
+  notifyBotToSettings,
   notifyTargetFromSettings,
   notifyTargetToSettings,
   hasSavedNotifyTarget,
@@ -67,6 +69,7 @@ describe('フォーム ↔ API', () => {
     dept_codes: ['10', '20'],
     lineworks_channel_id: 'ch-1',
     notify_recipient_id: null,
+    notify_bot_config_id: null,
     grace_days: 3,
     enabled: true,
     updated_at: '2026-10-10T00:00:00Z',
@@ -78,6 +81,7 @@ describe('フォーム ↔ API', () => {
       allowedSendersText: 'a@x.example\nb@y.example',
       dept_codes: ['10', '20'],
       notify_target: 'channel:ch-1',
+      notify_bot_config_id: '',
       grace_days: 3,
       enabled: true,
     })
@@ -101,6 +105,7 @@ describe('フォーム ↔ API', () => {
       allowedSendersText: '',
       dept_codes: ['10', ' 10 ', '', '30'],
       notify_target: '',
+      notify_bot_config_id: 'b1',
       grace_days: 0,
       enabled: false,
     }
@@ -110,6 +115,7 @@ describe('フォーム ↔ API', () => {
       dept_codes: ['10', '30'],
       lineworks_channel_id: null,
       notify_recipient_id: null,
+      notify_bot_config_id: null,
       grace_days: 0,
       enabled: false,
     })
@@ -144,12 +150,40 @@ describe('通知先 (グループ / 個人 / 通知しない)', () => {
       dept_codes: [],
       lineworks_channel_id: null,
       notify_recipient_id: 'r1',
+      notify_bot_config_id: 'b1',
       grace_days: 7,
       enabled: true,
     }
     const f = settingsToForm(s)
     expect(f.notify_target).toBe('recipient:r1')
+    expect(f.notify_bot_config_id).toBe('b1')
     expect(formToSettingsBody(f)).toEqual(s)
+  })
+
+  it('グループ・通知しないでは bot を送らない (null)', () => {
+    const f: SettingsForm = {
+      mailbox: '',
+      allowedSendersText: '',
+      dept_codes: [],
+      notify_target: 'recipient:r1',
+      notify_bot_config_id: 'b1',
+      grace_days: 7,
+      enabled: true,
+    }
+    expect(formToSettingsBody({ ...f, notify_target: 'channel:ch-1' }).notify_bot_config_id).toBeNull()
+    expect(formToSettingsBody({ ...f, notify_target: '' }).notify_bot_config_id).toBeNull()
+  })
+
+  it('bot 変換と選択肢の絞り込み', () => {
+    expect(notifyBotToSettings('recipient:r1', 'b1')).toBe('b1')
+    expect(notifyBotToSettings('recipient:r1', '')).toBeNull()
+    expect(notifyBotToSettings('channel:c1', 'b1')).toBeNull()
+    const bots = [
+      { id: 'a', provider: 'lineworks', enabled: true },
+      { id: 'b', provider: 'lineworks', enabled: false },
+      { id: 'c', provider: 'other', enabled: true },
+    ]
+    expect(notifyBotOptions(bots).map(b => b.id)).toEqual(['a'])
   })
 })
 
@@ -159,6 +193,7 @@ describe('validateSettingsForm', () => {
     allowedSendersText: 'a@x.example',
     dept_codes: [],
     notify_target: '',
+    notify_bot_config_id: '',
     grace_days: 60,
     enabled: true,
   }
@@ -176,6 +211,13 @@ describe('validateSettingsForm', () => {
       ])
   })
 
+  it('個人を選んだら bot は必須', () => {
+    const r = { ...ok, notify_target: 'recipient:r1' }
+    expect(validateSettingsForm(r)).toEqual(['送る bot を選んでください'])
+    expect(validateSettingsForm({ ...r, notify_bot_config_id: 'b1' })).toEqual([])
+    expect(validateSettingsForm({ ...ok, notify_target: 'channel:c1' })).toEqual([])
+  })
+
   it('猶予日数の範囲と整数', () => {
     expect(validateSettingsForm({ ...ok, grace_days: -1 })).toHaveLength(1)
     expect(validateSettingsForm({ ...ok, grace_days: 1.5 })).toHaveLength(1)
@@ -189,6 +231,7 @@ describe('テスト送信の判定', () => {
     allowedSendersText: 'a@x.example\nb@x.example',
     dept_codes: ['1', '2'],
     notify_target: 'channel:c1',
+    notify_bot_config_id: '',
     grace_days: 7,
     enabled: true,
   }
@@ -207,6 +250,12 @@ describe('テスト送信の判定', () => {
     expect(hasUnsavedChanges(saved, { ...saved, notify_target: 'recipient:r1' })).toBe(true)
     expect(hasUnsavedChanges(saved, { ...saved, grace_days: 8 })).toBe(true)
     expect(hasUnsavedChanges(saved, { ...saved, dept_codes: ['1'] })).toBe(true)
+  })
+
+  it('bot を変えたら未保存の変更', () => {
+    const r = { ...saved, notify_target: 'recipient:r1', notify_bot_config_id: 'b1' }
+    expect(hasUnsavedChanges(r, { ...r })).toBe(false)
+    expect(hasUnsavedChanges(r, { ...r, notify_bot_config_id: 'b2' })).toBe(true)
   })
 
   it('保存済みの通知先の有無', () => {
