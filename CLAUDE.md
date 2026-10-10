@@ -1,0 +1,24 @@
+# nuxt-leave
+
+休暇申請書 (有給・労災・特別休暇・欠勤) の PDF を 1 ページずつ乗務員と期間に紐づける管理画面。
+親: ohishi-exp/rust-leave-worker#1。back は rust-leave-worker の `/api/leave/*`。
+
+## 構成
+- Nuxt 4 + @nuxt/ui、SPA (`ssr: false`)、Cloudflare Workers (`cloudflare_module`)
+- API は `$fetch('/api/proxy/api/...')` → `server/api/proxy` → auth-worker `/alc-proxy` (service binding `AUTH_WORKER`)
+- 型と呼び出しは `app/utils/leave-api.ts` に集約。画面は `useLeaveApi()` (Bearer を載せ、401 で /login)
+- 画面: `/` 一覧 (unlinked/linked/ignored)、`/pages/[id]` 紐づけ (pdfjs-dist で該当ページだけ描く)、`/settings`
+- LINE WORKS の bot / グループは rust-alc-api の既存の口 (`/api/admin/bot/configs`・`/api/notify/lineworks/channels`)
+
+## テスト
+- 純粋な変換・検証は `app/utils/*.ts` に置き、`tests/utils/` で単体テスト → `coverage_100.toml` に登録 (100%)
+- `.vue` は登録しない
+- `npm test` / `npm run typecheck`
+
+## 罠
+- `@ippoan/*` は GitHub Packages。ローカルで npm install が通らないときは CI (PR) が初検証。lock は `regen-lockfile` workflow が作る
+- `@nuxt/schema` が二重に入ると nuxt.config の `nitro.preset` が型エラーになる (nuxt と @nuxt/ui の版を揃える)
+- wrangler.toml の named env は binding を継承しない → env ごとに再宣言。`[secrets] required = []` も各 env で
+- Secrets Store binding 名に `NUXT_PUBLIC_` を付けない (起動時 crash)
+- `.ippoan-dev.yaml` は置かない (dev-proxy の registry 未登録だと CI が落ちる)
+- merge = 本番 (auto-merge + auto tag)。back と auth-worker の振り分けが本番に出る前に merge しない
