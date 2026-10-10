@@ -258,9 +258,6 @@ onMounted(() => {
                   <UInput v-model="botForm.bot_secret" type="password" autocomplete="off" class="w-full" />
                 </UFormField>
               </div>
-              <UFormField label="Private Key" :required="!botForm.id" :description="botForm.id ? '空なら変えません' : undefined">
-                <UTextarea v-model="botForm.private_key" :rows="4" autocomplete="off" class="w-full font-mono" placeholder="PEM 形式の秘密鍵を貼る" />
-              </UFormField>
               <USwitch v-model="botForm.enabled" label="有効" />
               <UAlert v-if="botErrors.length > 0" color="error" title="保存できません">
                 <template #description>

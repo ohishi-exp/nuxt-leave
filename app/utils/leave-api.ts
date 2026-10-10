@@ -90,7 +90,6 @@ export interface BotConfigBody {
   client_id: string
   client_secret?: string
   service_account: string
-  private_key?: string
   bot_id: string
   enabled?: boolean
   bot_secret?: string

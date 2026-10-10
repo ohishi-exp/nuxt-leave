@@ -1,6 +1,6 @@
 /**
  * LINE WORKS bot の登録フォーム ↔ `POST /api/admin/bot/configs` (rust-alc-api) の変換。
- * 秘密値 (client_secret / private_key / bot_secret) は入力欄だけで、取得した値を表示しない。
+ * 秘密値 (client_secret / bot_secret) は入力欄だけで、取得した値を表示しない。
  * 編集のとき空のままなら body に載せない (= 既存の値を変えない)。
  */
 import type { BotConfig, BotConfigBody } from './leave-api'
@@ -13,7 +13,6 @@ export interface BotForm {
   bot_id: string
   enabled: boolean
   client_secret: string
-  private_key: string
   bot_secret: string
 }
 
@@ -26,7 +25,6 @@ export function emptyBotForm(): BotForm {
     bot_id: '',
     enabled: true,
     client_secret: '',
-    private_key: '',
     bot_secret: '',
   }
 }
@@ -58,7 +56,6 @@ export function validateBotForm(f: BotForm): string[] {
   // 新規は秘密値が無いと動かない (編集は空なら据え置き)
   if (f.id === '') {
     if (f.client_secret.trim() === '') errors.push('Client Secret を入れてください')
-    if (f.private_key.trim() === '') errors.push('Private Key を入れてください')
   }
   return errors
 }
@@ -74,8 +71,6 @@ export function toBotConfigBody(f: BotForm): BotConfigBody {
   }
   if (f.id !== '') body.id = f.id
   if (f.client_secret.trim() !== '') body.client_secret = f.client_secret.trim()
-  // private key は改行を含む PEM なので中身はそのまま (前後の空白だけ落とす)
-  if (f.private_key.trim() !== '') body.private_key = f.private_key.trim()
   if (f.bot_secret.trim() !== '') body.bot_secret = f.bot_secret.trim()
   return body
 }
