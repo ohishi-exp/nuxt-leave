@@ -67,6 +67,8 @@ export interface LeaveSettings {
   dept_codes: string[]
   lineworks_channel_id: string | null
   notify_recipient_id: string | null
+  /** 個人宛てに使う LINE WORKS bot (個人を選んだときだけ値) */
+  notify_bot_config_id: string | null
   grace_days: number
   enabled: boolean
   updated_at?: string | null
@@ -219,6 +221,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_grace_days: '警告の猶予日数は 0〜60 です',
   unknown_lineworks_channel: '通知先グループが見つかりません',
   unknown_notify_recipient: '選んだ個人が見つかりません',
+  unknown_notify_bot: '選んだ bot が使えません',
+  notify_bot_without_recipient: 'bot は個人を選んだときだけ指定できます',
   both_notify_targets: '通知先は 1 つだけ選んでください',
   no_notify_target: '通知先が保存されていません',
   notify_failed: '送信に失敗しました',

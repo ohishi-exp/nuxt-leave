@@ -17,6 +17,8 @@ export interface SettingsForm {
   dept_codes: string[]
   /** 通知先。`channel:<id>` / `recipient:<id>`、通知しないは空文字 */
   notify_target: string
+  /** 個人宛てに送る bot の id (個人のときだけ使う。未選択は空文字) */
+  notify_bot_config_id: string
   grace_days: number
   enabled: boolean
 }
@@ -90,12 +92,23 @@ export function notifyTargetToSettings(
   }
 }
 
+/** 通知先が個人のときだけ bot を送る (グループ・通知しないは null) */
+export function notifyBotToSettings(target: string, botId: string): string | null {
+  return target.startsWith(RECIPIENT_PREFIX) && botId !== '' ? botId : null
+}
+
+/** 個人宛てに選べる bot (LINE WORKS かつ有効) */
+export function notifyBotOptions<T extends { provider: string, enabled: boolean }>(bots: T[]): T[] {
+  return bots.filter(b => b.provider === 'lineworks' && b.enabled)
+}
+
 export function settingsToForm(s: LeaveSettings): SettingsForm {
   return {
     mailbox: s.mailbox ?? '',
     allowedSendersText: s.allowed_senders.join('\n'),
     dept_codes: [...s.dept_codes],
     notify_target: notifyTargetFromSettings(s),
+    notify_bot_config_id: s.notify_bot_config_id ?? '',
     grace_days: s.grace_days,
     enabled: s.enabled,
   }
@@ -108,6 +121,7 @@ export function formToSettingsBody(f: SettingsForm): SettingsBody {
     allowed_senders: parseSenders(f.allowedSendersText),
     dept_codes: [...new Set(f.dept_codes.map(d => d.trim()).filter(d => d !== ''))],
     ...notifyTargetToSettings(f.notify_target),
+    notify_bot_config_id: notifyBotToSettings(f.notify_target, f.notify_bot_config_id),
     grace_days: f.grace_days,
     enabled: f.enabled,
   }
@@ -122,6 +136,9 @@ export function validateSettingsForm(f: SettingsForm): string[] {
   if (bad.length > 0) errors.push(`差出人のアドレスの形が正しくありません: ${bad.join(', ')}`)
   if (!Number.isInteger(f.grace_days) || f.grace_days < GRACE_DAYS_MIN || f.grace_days > GRACE_DAYS_MAX) {
     errors.push(`警告の猶予日数は ${GRACE_DAYS_MIN}〜${GRACE_DAYS_MAX} の整数です`)
+  }
+  if (f.notify_target.startsWith(RECIPIENT_PREFIX) && f.notify_bot_config_id === '') {
+    errors.push('送る bot を選んでください')
   }
   return errors
 }
