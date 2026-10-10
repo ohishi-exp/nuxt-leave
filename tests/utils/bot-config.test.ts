@@ -3,6 +3,8 @@ import {
   botFormFromConfig,
   botWebhookUrl,
   channelLabel,
+  lineworksRecipients,
+  recipientLabel,
   emptyBotForm,
   toBotConfigBody,
   validateBotForm,
@@ -105,5 +107,21 @@ describe('表示', () => {
     expect(channelLabel({ title: '休暇', channel_id: 'c1' })).toBe('休暇')
     expect(channelLabel({ title: ' ', channel_id: 'c1' })).toBe('c1')
     expect(channelLabel({ title: null, channel_id: 'c1' })).toBe('c1')
+  })
+})
+
+describe('通知先の個人', () => {
+  it('LINE WORKS の有効な受信者だけ', () => {
+    const rs = [
+      { id: 'a', name: 'A', provider: 'lineworks', enabled: true },
+      { id: 'b', name: 'B', provider: 'line', enabled: true },
+      { id: 'c', name: 'C', provider: 'lineworks', enabled: false },
+    ]
+    expect(lineworksRecipients(rs).map(r => r.id)).toEqual(['a'])
+  })
+
+  it('表示は name (空なら id)', () => {
+    expect(recipientLabel({ id: 'r1', name: '山田' })).toBe('山田')
+    expect(recipientLabel({ id: 'r1', name: ' ' })).toBe('r1')
   })
 })

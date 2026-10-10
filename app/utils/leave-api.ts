@@ -2,7 +2,7 @@
  * 休暇申請の画面が叩く API の型と呼び出し (URL と body の組み立て) をここに集約する。
  *
  * - `/api/leave/*` は rust-leave-worker (auth-worker `/alc-proxy` 経由)
- * - `/api/admin/bot/configs`・`/api/notify/lineworks/channels` は rust-alc-api の既存の口
+ * - `/api/admin/bot/configs`・`/api/notify/lineworks/channels`・`/api/notify/recipients` は rust-alc-api の既存の口
  *
  * 画面からは `/api/proxy/api/...` を叩く (server/api/proxy が auth-worker に渡す)。
  * fetch の実体は引数で受ける (画面は $fetch、テストは偽物)。
@@ -66,6 +66,7 @@ export interface LeaveSettings {
   allowed_senders: string[]
   dept_codes: string[]
   lineworks_channel_id: string | null
+  notify_recipient_id: string | null
   grace_days: number
   enabled: boolean
   updated_at?: string | null
@@ -101,6 +102,14 @@ export interface LineworksChannel {
   title: string | null
   bot_config_id?: string
   active?: boolean
+}
+
+/** 通知の受信者 (rust-alc-api `GET /notify/recipients` の行のうち画面で使う列) */
+export interface NotifyRecipient {
+  id: string
+  name: string
+  provider: string
+  enabled: boolean
 }
 
 export interface FetchOptions {
@@ -180,6 +189,9 @@ export function createLeaveApi(fetcher: Fetcher) {
     listChannels(): Promise<LineworksChannel[]> {
       return fetcher<LineworksChannel[]>(`${API_BASE}/notify/lineworks/channels`)
     },
+    listRecipients(): Promise<NotifyRecipient[]> {
+      return fetcher<NotifyRecipient[]>(`${API_BASE}/notify/recipients`)
+    },
   }
 }
 
@@ -203,6 +215,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   mailbox_taken: 'この受信アドレスは他の会社が使っています',
   invalid_grace_days: '警告の猶予日数は 0〜60 です',
   unknown_lineworks_channel: '通知先グループが見つかりません',
+  unknown_notify_recipient: '選んだ個人が見つかりません',
+  both_notify_targets: '通知先は 1 つだけ選んでください',
   ichiban_not_configured: '一番星につながっていません (この環境では社員・部門を読めません)',
   ichiban_upstream: '一番星から社員・部門を読めませんでした',
   ichiban_unavailable: '一番星から社員・部門を読めませんでした',

@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
+  channelTarget,
   formToSettingsBody,
   invalidSenders,
   MAILBOX_DOMAIN,
   mailboxAddress,
   mailboxError,
   normalizeMailbox,
+  notifyTargetFromSettings,
+  notifyTargetToSettings,
   parseSenders,
+  recipientTarget,
   settingsToForm,
   validateSettingsForm,
   type SettingsForm,
@@ -59,6 +63,7 @@ describe('フォーム ↔ API', () => {
     allowed_senders: ['a@x.example', 'b@y.example'],
     dept_codes: ['10', '20'],
     lineworks_channel_id: 'ch-1',
+    notify_recipient_id: null,
     grace_days: 3,
     enabled: true,
     updated_at: '2026-10-10T00:00:00Z',
@@ -69,7 +74,7 @@ describe('フォーム ↔ API', () => {
       mailbox: 'ohishi',
       allowedSendersText: 'a@x.example\nb@y.example',
       dept_codes: ['10', '20'],
-      lineworks_channel_id: 'ch-1',
+      notify_target: 'channel:ch-1',
       grace_days: 3,
       enabled: true,
     })
@@ -78,7 +83,7 @@ describe('フォーム ↔ API', () => {
   it('null の項目は空に', () => {
     const f = settingsToForm({ ...api, mailbox: null, lineworks_channel_id: null, allowed_senders: [] })
     expect(f.mailbox).toBe('')
-    expect(f.lineworks_channel_id).toBe('')
+    expect(f.notify_target).toBe('')
     expect(f.allowedSendersText).toBe('')
   })
 
@@ -92,7 +97,7 @@ describe('フォーム ↔ API', () => {
       mailbox: '  ',
       allowedSendersText: '',
       dept_codes: ['10', ' 10 ', '', '30'],
-      lineworks_channel_id: '',
+      notify_target: '',
       grace_days: 0,
       enabled: false,
     }
@@ -101,9 +106,47 @@ describe('フォーム ↔ API', () => {
       allowed_senders: [],
       dept_codes: ['10', '30'],
       lineworks_channel_id: null,
+      notify_recipient_id: null,
       grace_days: 0,
       enabled: false,
     })
+  })
+})
+
+describe('通知先 (グループ / 個人 / 通知しない)', () => {
+  it('選択値は種別付き', () => {
+    expect(channelTarget('c1')).toBe('channel:c1')
+    expect(recipientTarget('r1')).toBe('recipient:r1')
+  })
+
+  it('2 列 → 選択値', () => {
+    expect(notifyTargetFromSettings({ lineworks_channel_id: 'c1', notify_recipient_id: null })).toBe('channel:c1')
+    expect(notifyTargetFromSettings({ lineworks_channel_id: null, notify_recipient_id: 'r1' })).toBe('recipient:r1')
+    expect(notifyTargetFromSettings({ lineworks_channel_id: null, notify_recipient_id: null })).toBe('')
+    expect(notifyTargetFromSettings({ lineworks_channel_id: '', notify_recipient_id: '' })).toBe('')
+  })
+
+  it('選択値 → 2 列 (選ばなかった方は null)', () => {
+    expect(notifyTargetToSettings('channel:c1')).toEqual({ lineworks_channel_id: 'c1', notify_recipient_id: null })
+    expect(notifyTargetToSettings('recipient:r1')).toEqual({ lineworks_channel_id: null, notify_recipient_id: 'r1' })
+    expect(notifyTargetToSettings('')).toEqual({ lineworks_channel_id: null, notify_recipient_id: null })
+    expect(notifyTargetToSettings('channel:')).toEqual({ lineworks_channel_id: null, notify_recipient_id: null })
+    expect(notifyTargetToSettings('other:x')).toEqual({ lineworks_channel_id: null, notify_recipient_id: null })
+  })
+
+  it('個人を選んだ設定の往復', () => {
+    const s = {
+      mailbox: null,
+      allowed_senders: [],
+      dept_codes: [],
+      lineworks_channel_id: null,
+      notify_recipient_id: 'r1',
+      grace_days: 7,
+      enabled: true,
+    }
+    const f = settingsToForm(s)
+    expect(f.notify_target).toBe('recipient:r1')
+    expect(formToSettingsBody(f)).toEqual(s)
   })
 })
 
@@ -112,7 +155,7 @@ describe('validateSettingsForm', () => {
     mailbox: 'ohishi',
     allowedSendersText: 'a@x.example',
     dept_codes: [],
-    lineworks_channel_id: '',
+    notify_target: '',
     grace_days: 60,
     enabled: true,
   }

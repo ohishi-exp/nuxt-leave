@@ -3,7 +3,7 @@
  * 秘密値 (client_secret / bot_secret) は入力欄だけで、取得した値を表示しない。
  * 編集のとき空のままなら body に載せない (= 既存の値を変えない)。
  */
-import type { BotConfig, BotConfigBody } from './leave-api'
+import type { BotConfig, BotConfigBody, NotifyRecipient } from './leave-api'
 
 export interface BotForm {
   id: string
@@ -83,4 +83,14 @@ export function botWebhookUrl(authWorkerUrl: string, botId: string): string {
 /** 通知先グループの選択肢 (title が無ければ channel_id) */
 export function channelLabel(ch: { title: string | null, channel_id: string }): string {
   return ch.title?.trim() || ch.channel_id
+}
+
+/** 通知先に出せる個人 (LINE WORKS の有効な受信者だけ) */
+export function lineworksRecipients(rs: NotifyRecipient[]): NotifyRecipient[] {
+  return rs.filter(r => r.provider === 'lineworks' && r.enabled)
+}
+
+/** 通知先の個人の選択肢 (name が空なら id) */
+export function recipientLabel(r: { name: string, id: string }): string {
+  return r.name.trim() || r.id
 }

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { errorMessage, isForbidden, type BotConfig, type Department, type LineworksChannel } from '~/utils/leave-api'
+import { errorMessage, isForbidden, type BotConfig, type Department, type LineworksChannel, type NotifyRecipient } from '~/utils/leave-api'
 import {
   DEFAULT_GRACE_DAYS,
   GRACE_DAYS_MAX,
   GRACE_DAYS_MIN,
   MAILBOX_DOMAIN,
+  channelTarget,
   formToSettingsBody,
   mailboxAddress,
   mailboxError,
+  recipientTarget,
   settingsToForm,
   validateSettingsForm,
   type SettingsForm,
@@ -17,6 +19,8 @@ import {
   botWebhookUrl,
   channelLabel,
   emptyBotForm,
+  lineworksRecipients,
+  recipientLabel,
   toBotConfigBody,
   validateBotForm,
   type BotForm,
@@ -31,12 +35,13 @@ const form = ref<SettingsForm>({
   mailbox: '',
   allowedSendersText: '',
   dept_codes: [],
-  lineworks_channel_id: '',
+  notify_target: '',
   grace_days: DEFAULT_GRACE_DAYS,
   enabled: false,
 })
 const departments = ref<Department[]>([])
 const channels = ref<LineworksChannel[]>([])
+const recipients = ref<NotifyRecipient[]>([])
 const bots = ref<BotConfig[]>([])
 
 const loading = ref(false)
@@ -81,9 +86,10 @@ async function loadDepartments() {
 async function loadLineworks() {
   lineworksError.value = ''
   try {
-    const [b, c] = await Promise.all([api.listBotConfigs(), api.listChannels()])
+    const [b, c, r] = await Promise.all([api.listBotConfigs(), api.listChannels(), api.listRecipients()])
     bots.value = b.filter(x => x.provider === 'lineworks')
     channels.value = c
+    recipients.value = lineworksRecipients(r)
   }
   catch (e) {
     lineworksError.value = errorMessage(e)
@@ -271,10 +277,15 @@ onMounted(() => {
             </div>
           </div>
 
-          <UFormField label="通知先グループ" description="bot をグループに招待すると一覧に出ます。">
-            <select v-model="form.lineworks_channel_id" class="w-full max-w-md rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1">
+          <UFormField label="通知先" description="グループは bot を招待すると、個人は通知の受信者に LINE WORKS の人がいると一覧に出ます。">
+            <select v-model="form.notify_target" class="w-full max-w-md rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1">
               <option value="">通知しない</option>
-              <option v-for="c in channels" :key="c.id" :value="c.id">{{ channelLabel(c) }}</option>
+              <optgroup label="グループ">
+                <option v-for="c in channels" :key="c.id" :value="channelTarget(c.id)">{{ channelLabel(c) }}</option>
+              </optgroup>
+              <optgroup label="個人">
+                <option v-for="r in recipients" :key="r.id" :value="recipientTarget(r.id)">{{ recipientLabel(r) }}</option>
+              </optgroup>
             </select>
           </UFormField>
         </div>
