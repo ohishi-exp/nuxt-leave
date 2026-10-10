@@ -15,8 +15,8 @@ export interface SettingsForm {
   /** 差出人アドレス。1 行に 1 つ (カンマ・空白区切りも可) */
   allowedSendersText: string
   dept_codes: string[]
-  /** 未選択は空文字 */
-  lineworks_channel_id: string
+  /** 通知先。`channel:<id>` / `recipient:<id>`、通知しないは空文字 */
+  notify_target: string
   grace_days: number
   enabled: boolean
 }
@@ -56,12 +56,46 @@ export function invalidSenders(senders: string[]): string[] {
   return senders.filter(s => !EMAIL_PATTERN.test(s))
 }
 
+const CHANNEL_PREFIX = 'channel:'
+const RECIPIENT_PREFIX = 'recipient:'
+
+export function channelTarget(id: string): string {
+  return `${CHANNEL_PREFIX}${id}`
+}
+
+export function recipientTarget(id: string): string {
+  return `${RECIPIENT_PREFIX}${id}`
+}
+
+/** 設定の 2 列 → 通知先の選択値 (グループを優先。どちらも無ければ空文字) */
+export function notifyTargetFromSettings(
+  s: Pick<LeaveSettings, 'lineworks_channel_id' | 'notify_recipient_id'>,
+): string {
+  if (s.lineworks_channel_id) return channelTarget(s.lineworks_channel_id)
+  if (s.notify_recipient_id) return recipientTarget(s.notify_recipient_id)
+  return ''
+}
+
+/** 通知先の選択値 → 設定の 2 列 (選ばなかった方は null) */
+export function notifyTargetToSettings(
+  target: string,
+): Pick<SettingsBody, 'lineworks_channel_id' | 'notify_recipient_id'> {
+  const pick = (prefix: string) => {
+    const id = target.startsWith(prefix) ? target.slice(prefix.length) : ''
+    return id === '' ? null : id
+  }
+  return {
+    lineworks_channel_id: pick(CHANNEL_PREFIX),
+    notify_recipient_id: pick(RECIPIENT_PREFIX),
+  }
+}
+
 export function settingsToForm(s: LeaveSettings): SettingsForm {
   return {
     mailbox: s.mailbox ?? '',
     allowedSendersText: s.allowed_senders.join('\n'),
     dept_codes: [...s.dept_codes],
-    lineworks_channel_id: s.lineworks_channel_id ?? '',
+    notify_target: notifyTargetFromSettings(s),
     grace_days: s.grace_days,
     enabled: s.enabled,
   }
@@ -73,7 +107,7 @@ export function formToSettingsBody(f: SettingsForm): SettingsBody {
     mailbox: mailbox === '' ? null : mailbox,
     allowed_senders: parseSenders(f.allowedSendersText),
     dept_codes: [...new Set(f.dept_codes.map(d => d.trim()).filter(d => d !== ''))],
-    lineworks_channel_id: f.lineworks_channel_id === '' ? null : f.lineworks_channel_id,
+    ...notifyTargetToSettings(f.notify_target),
     grace_days: f.grace_days,
     enabled: f.enabled,
   }

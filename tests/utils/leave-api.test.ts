@@ -80,7 +80,7 @@ describe('createLeaveApi', () => {
     const { fetcher, calls } = fakeFetcher({ mailbox: 'abc' })
     const api = createLeaveApi(fetcher)
     expect(await api.getSettings()).toEqual({ mailbox: 'abc' })
-    const body = { mailbox: 'abc', allowed_senders: [], dept_codes: [], lineworks_channel_id: null, grace_days: 7, enabled: true }
+    const body = { mailbox: 'abc', allowed_senders: [], dept_codes: [], lineworks_channel_id: null, notify_recipient_id: null, grace_days: 7, enabled: true }
     await api.putSettings(body)
     expect(calls[1]).toEqual({ url: '/api/proxy/api/leave/settings', options: { method: 'PUT', body } })
   })
@@ -93,10 +93,12 @@ describe('createLeaveApi', () => {
     await api.saveBotConfig(body)
     await api.deleteBotConfig('b1')
     await api.listChannels()
+    await api.listRecipients()
     expect(calls.slice(1)).toEqual([
       { url: '/api/proxy/api/admin/bot/configs', options: { method: 'POST', body } },
       { url: '/api/proxy/api/admin/bot/configs/b1', options: { method: 'DELETE' } },
       { url: '/api/proxy/api/notify/lineworks/channels', options: undefined },
+      { url: '/api/proxy/api/notify/recipients', options: undefined },
     ])
   })
 })
@@ -121,6 +123,8 @@ describe('エラーの文', () => {
       .toBe('半日は開始日と終了日が同じ日のときだけ選べます')
     expect(errorMessage({ status: 409, data: { error: 'mailbox_taken' } }))
       .toBe('この受信アドレスは他の会社が使っています')
+    expect(errorMessage({ status: 400, data: { error: 'unknown_notify_recipient' } })).toBe('選んだ個人が見つかりません')
+    expect(errorMessage({ status: 400, data: { error: 'both_notify_targets' } })).toBe('通知先は 1 つだけ選んでください')
     expect(errorMessage({ status: 400, data: { error: 'something_new' } })).toBe('something_new')
   })
 
