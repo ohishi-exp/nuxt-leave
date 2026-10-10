@@ -76,6 +76,12 @@ describe('createLeaveApi', () => {
     ])
   })
 
+  it('testNotify は body 無しの POST', async () => {
+    const { fetcher, calls } = fakeFetcher({})
+    await createLeaveApi(fetcher).testNotify()
+    expect(calls[0]).toEqual({ url: '/api/proxy/api/leave/settings/test-notify', options: { method: 'POST' } })
+  })
+
   it('settings の GET / PUT', async () => {
     const { fetcher, calls } = fakeFetcher({ mailbox: 'abc' })
     const api = createLeaveApi(fetcher)
@@ -125,6 +131,9 @@ describe('エラーの文', () => {
       .toBe('この受信アドレスは他の会社が使っています')
     expect(errorMessage({ status: 400, data: { error: 'unknown_notify_recipient' } })).toBe('選んだ個人が見つかりません')
     expect(errorMessage({ status: 400, data: { error: 'both_notify_targets' } })).toBe('通知先は 1 つだけ選んでください')
+    expect(errorMessage({ status: 404, data: { error: 'no_notify_target' } })).toBe('通知先が保存されていません')
+    expect(errorMessage({ status: 502, data: { error: 'notify_failed' } })).toBe('送信に失敗しました')
+    expect(errorMessage({ status: 503, data: { error: 'notify_unavailable' } })).toBe('この環境では送れません')
     expect(errorMessage({ status: 400, data: { error: 'something_new' } })).toBe('something_new')
   })
 

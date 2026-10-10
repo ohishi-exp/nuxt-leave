@@ -11,6 +11,7 @@ import {
   mailboxError,
   recipientTarget,
   settingsToForm,
+  testNotifyBlocker,
   validateSettingsForm,
   type SettingsForm,
 } from '~/utils/leave-settings'
@@ -39,6 +40,8 @@ const form = ref<SettingsForm>({
   grace_days: DEFAULT_GRACE_DAYS,
   enabled: false,
 })
+/** 最後に読んだ / 保存した設定 (テスト送信の判定に使う) */
+const saved = ref<SettingsForm | null>(null)
 const departments = ref<Department[]>([])
 const channels = ref<LineworksChannel[]>([])
 const recipients = ref<NotifyRecipient[]>([])
@@ -56,14 +59,20 @@ const botForm = ref<BotForm | null>(null)
 const botErrors = ref<string[]>([])
 const botSaving = ref(false)
 
+const testing = ref(false)
+const testResult = ref<{ ok: boolean, message: string } | null>(null)
+
 const address = computed(() => mailboxAddress(form.value.mailbox))
 const mailboxMsg = computed(() => mailboxError(form.value.mailbox))
+const testBlocker = computed(() => testNotifyBlocker(saved.value, form.value))
 
 async function loadSettings() {
   loading.value = true
   error.value = ''
   try {
-    form.value = settingsToForm(await api.getSettings())
+    const s = await api.getSettings()
+    form.value = settingsToForm(s)
+    saved.value = settingsToForm(s)
   }
   catch (e) {
     forbidden.value = isForbidden(e)
@@ -108,7 +117,10 @@ async function save() {
   if (formErrors.value.length > 0) return
   saving.value = true
   try {
-    form.value = settingsToForm(await api.putSettings(formToSettingsBody(form.value)))
+    const s = await api.putSettings(formToSettingsBody(form.value))
+    form.value = settingsToForm(s)
+    saved.value = settingsToForm(s)
+    testResult.value = null
     toast.add({ title: '設定を保存しました', color: 'success' })
   }
   catch (e) {
@@ -116,6 +128,22 @@ async function save() {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function sendTest() {
+  if (testing.value || testBlocker.value) return
+  testing.value = true
+  testResult.value = null
+  try {
+    await api.testNotify()
+    testResult.value = { ok: true, message: '送りました。LINE WORKS を確認してください' }
+  }
+  catch (e) {
+    testResult.value = { ok: false, message: errorMessage(e) }
+  }
+  finally {
+    testing.value = false
   }
 }
 
@@ -287,6 +315,24 @@ onMounted(() => {
                 <option v-for="r in recipients" :key="r.id" :value="recipientTarget(r.id)">{{ recipientLabel(r) }}</option>
               </optgroup>
             </select>
+            <div class="mt-2 flex items-center gap-3">
+              <UButton
+                label="テスト送信"
+                icon="i-lucide-send"
+                color="neutral"
+                variant="outline"
+                :loading="testing"
+                :disabled="testBlocker !== null"
+                @click="sendTest"
+              />
+              <span v-if="testBlocker === 'unsaved'" class="text-sm text-(--ui-text-muted)">保存してから送れます</span>
+            </div>
+            <UAlert
+              v-if="testResult"
+              class="mt-2 max-w-md"
+              :color="testResult.ok ? 'success' : 'error'"
+              :title="testResult.message"
+            />
           </UFormField>
         </div>
       </UCard>

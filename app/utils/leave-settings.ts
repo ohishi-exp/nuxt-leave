@@ -125,3 +125,27 @@ export function validateSettingsForm(f: SettingsForm): string[] {
   }
   return errors
 }
+
+/** フォームが保存済みの値と違うか (差出人・部門の並びや重複の違いは無視する) */
+export function hasUnsavedChanges(saved: SettingsForm, current: SettingsForm): boolean {
+  const key = (f: SettingsForm) => {
+    const b = formToSettingsBody(f)
+    return JSON.stringify({
+      ...b,
+      allowed_senders: [...b.allowed_senders].sort(),
+      dept_codes: [...b.dept_codes].sort(),
+    })
+  }
+  return key(saved) !== key(current)
+}
+
+/** 保存済みの通知先があるか (「通知しない」なら false) */
+export function hasSavedNotifyTarget(saved: SettingsForm): boolean {
+  return saved.notify_target !== ''
+}
+
+/** テスト送信を押せない理由 (押せるなら null)。送るのは保存済みの通知先なので */
+export function testNotifyBlocker(saved: SettingsForm | null, current: SettingsForm): 'unsaved' | 'no_target' | null {
+  if (saved === null || !hasSavedNotifyTarget(saved)) return 'no_target'
+  return hasUnsavedChanges(saved, current) ? 'unsaved' : null
+}
