@@ -17,6 +17,8 @@ interface Row {
   periods: LeavePeriod[]
   saving: boolean
   error: string
+  /** 期間の取得に失敗した行 (空の期間のまま保存して消さないよう、保存を止める) */
+  loadError: string
 }
 
 interface RowHandle {
@@ -51,6 +53,31 @@ function setRowRef(pageId: string, el: unknown) {
   else rowRefs.delete(pageId)
 }
 
+/** 行の期間を取る。失敗したら loadError を立てる (成功すれば消す) */
+async function loadDetail(row: Row) {
+  row.loadError = ''
+  try {
+    const detail = await api.getPage(row.page.id)
+    row.page = detail
+    row.periods = detail.periods
+  }
+  catch (e) {
+    row.loadError = errorMessage(e)
+  }
+}
+
+async function reloadRow(index: number) {
+  const row = rows.value[index]
+  if (!row) return
+  row.saving = true
+  try {
+    await loadDetail(row)
+  }
+  finally {
+    row.saving = false
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -66,17 +93,10 @@ async function load() {
     const list = await api.listPages({ r2_key: first.r2_key, limit: 200 })
     // 一覧の行には期間が無い。紐づけ済み・対象外の行だけ、期間を取って初期値にする
     rows.value = await Promise.all(list.map(async (p): Promise<Row> => {
-      let periods: LeavePeriod[] = []
-      if (p.id === first.id) periods = first.periods
-      else if (p.status !== 'unlinked') {
-        try {
-          periods = (await api.getPage(p.id)).periods
-        }
-        catch {
-          periods = []
-        }
-      }
-      return { page: p, periods, saving: false, error: '' }
+      const row: Row = { page: p, periods: [], saving: false, error: '', loadError: '' }
+      if (p.id === first.id) row.periods = first.periods
+      else if (p.status !== 'unlinked') await loadDetail(row)
+      return row
     }))
   }
   catch (e) {
@@ -179,7 +199,9 @@ onMounted(() => {
           :employees="employees"
           :saving="r.saving"
           :error="r.error"
+          :load-error="r.loadError"
           @save="(status, form) => onSave(i, status, form)"
+          @reload="reloadRow(i)"
         />
       </div>
 

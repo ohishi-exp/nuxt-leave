@@ -22,10 +22,13 @@ const props = defineProps<{
   saving: boolean
   /** 保存に失敗したときの文 (この行にだけ出す) */
   error: string
+  /** 期間の読み込みに失敗した行 (空のまま保存して期間を消さないよう、保存を止める) */
+  loadError: string
 }>()
 
 const emit = defineEmits<{
   save: [status: PageStatus, form: LinkForm]
+  reload: []
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -60,6 +63,7 @@ function removePeriod(i: number) {
 }
 
 function submit(status: PageStatus) {
+  if (props.loadError) return
   // 対象外・未紐づけに戻すときは、空のまま (日付未入力) の期間行を送らない
   const f: LinkForm = status === 'linked'
     ? form.value
@@ -187,10 +191,16 @@ defineExpose({ focusEmployee, scrollHere })
         </template>
       </UAlert>
 
+      <UAlert v-if="loadError" color="warning" title="この行の読み込みに失敗しました" :description="loadError">
+        <template #actions>
+          <UButton label="再読み込み" icon="i-lucide-refresh-cw" color="neutral" variant="outline" size="xs" :loading="saving" @click="emit('reload')" />
+        </template>
+      </UAlert>
+
       <div class="flex flex-wrap gap-2">
-        <UButton label="紐づける" icon="i-lucide-link" :loading="saving" @click="submit('linked')" />
-        <UButton label="対象外" color="neutral" variant="outline" :disabled="saving" @click="submit('ignored')" />
-        <UButton label="未紐づけに戻す" color="neutral" variant="ghost" :disabled="saving" @click="submit('unlinked')" />
+        <UButton label="紐づける" icon="i-lucide-link" :loading="saving" :disabled="!!loadError" @click="submit('linked')" />
+        <UButton label="対象外" color="neutral" variant="outline" :disabled="saving || !!loadError" @click="submit('ignored')" />
+        <UButton label="未紐づけに戻す" color="neutral" variant="ghost" :disabled="saving || !!loadError" @click="submit('unlinked')" />
       </div>
     </div>
   </div>
