@@ -2,19 +2,26 @@
 import { errorMessage, type Employee } from '~/utils/leave-api'
 import { searchEmployees, toEmployeeOptions } from '~/utils/employees'
 
-/** 乗務員の選択 (社員C か氏名で検索)。一覧は自分で取る。 */
+/**
+ * 乗務員の選択 (社員C か氏名で検索)。
+ * `employees` を渡さなければ一覧は自分で取る (行ごとに置く画面は親が 1 回取って渡す)。
+ */
 const model = defineModel<string>({ required: true })
+const props = defineProps<{ employees?: Employee[] }>()
 
 const api = useLeaveApi()
-const employees = ref<Employee[]>([])
+const own = ref<Employee[]>([])
 const searchTerm = ref('')
 const error = ref('')
 
-const items = computed(() => toEmployeeOptions(searchEmployees(employees.value, searchTerm.value)))
+const items = computed(() =>
+  toEmployeeOptions(searchEmployees(props.employees ?? own.value, searchTerm.value)),
+)
 
 onMounted(async () => {
+  if (props.employees) return
   try {
-    employees.value = await api.listEmployees()
+    own.value = await api.listEmployees()
   }
   catch (e) {
     error.value = errorMessage(e)

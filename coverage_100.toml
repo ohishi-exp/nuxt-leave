@@ -33,6 +33,10 @@ path = "app/utils/pages-list.ts"
 branches = true
 
 [[files]]
+path = "app/utils/documents.ts"
+branches = true
+
+[[files]]
 path = "app/utils/calendar.ts"
 branches = true
 

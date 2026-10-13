@@ -267,13 +267,44 @@ export type Fetcher = <T>(url: string, options?: FetchOptions) => Promise<T>
 export const PAGE_LIMIT = 50
 
 export interface ListPagesParams {
-  status: PageStatus
+  status?: PageStatus
+  /** 指定すると、その PDF のページだけが page_no 順で返る (1 PDF は最大 50 ページ) */
+  r2_key?: string
   limit?: number
   offset?: number
 }
 
 export function listPagesQuery(p: ListPagesParams): Record<string, string | number> {
-  return { status: p.status, limit: p.limit ?? PAGE_LIMIT, offset: p.offset ?? 0 }
+  const q: Record<string, string | number> = { limit: p.limit ?? PAGE_LIMIT, offset: p.offset ?? 0 }
+  if (p.status) q.status = p.status
+  if (p.r2_key) q.r2_key = p.r2_key
+  return q
+}
+
+/** 一覧の絞り込み: open = 未紐づけのページがある PDF、done = 全ページが紐づけ済みか対象外 */
+export type DocState = 'open' | 'done' | 'all'
+
+/** PDF 1 件 (`GET /api/leave/documents` の 1 行) */
+export interface LeaveDocument {
+  r2_key: string
+  first_page_id: string
+  received_at: string
+  mail_from: string | null
+  subject: string | null
+  page_count: number
+  unlinked_count: number
+  linked_count: number
+  ignored_count: number
+}
+
+export interface ListDocumentsParams {
+  state?: DocState
+  limit?: number
+  offset?: number
+}
+
+export function listDocumentsQuery(p: ListDocumentsParams): Record<string, string | number> {
+  return { state: p.state ?? 'open', limit: p.limit ?? PAGE_LIMIT, offset: p.offset ?? 0 }
 }
 
 export function pageUrl(id: string): string {
@@ -297,6 +328,12 @@ export function createLeaveApi(fetcher: Fetcher) {
     async listPages(p: ListPagesParams): Promise<LeavePage[]> {
       const r = await fetcher<{ data: LeavePage[] }>(`${API_BASE}/leave/pages`, {
         query: listPagesQuery(p),
+      })
+      return r.data
+    },
+    async listDocuments(p: ListDocumentsParams = {}): Promise<LeaveDocument[]> {
+      const r = await fetcher<{ data: LeaveDocument[] }>(`${API_BASE}/leave/documents`, {
+        query: listDocumentsQuery(p),
       })
       return r.data
     },
