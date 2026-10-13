@@ -253,3 +253,11 @@ describe('カレンダーと付与台帳', () => {
     expect(msg('expires_before_grant')).toBe('期限が付与日より前です')
   })
 })
+
+describe('listAlerts', () => {
+  it('alerts を返す', async () => {
+    const { fetcher, calls } = fakeFetcher({ alerts: [{ employee_cd: '1' }] })
+    expect(await createLeaveApi(fetcher).listAlerts()).toEqual([{ employee_cd: '1' }])
+    expect(calls[0]!.url).toBe('/api/proxy/api/leave/alerts')
+  })
+})

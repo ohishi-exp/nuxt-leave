@@ -18,8 +18,6 @@ export interface LeavePage {
   id: string
   r2_key: string
   page_no: number
-  mail_from: string | null
-  subject: string | null
   received_at: string
   employee_cd: string | null
   status: PageStatus
@@ -54,6 +52,18 @@ export interface Employee {
   dept_code?: string | number | null
   hire_date?: string | null
   retire_date?: string | null
+}
+
+export type AlertDirection = 'ichiban_only' | 'pdf_only'
+
+/** 未解消の漏れ 1 件 (`GET /api/leave/alerts`) */
+export interface LeaveAlert {
+  employee_cd: string
+  day: string
+  kind: string
+  direction: AlertDirection
+  first_seen_at: string
+  notified_at: string | null
 }
 
 export interface Department {
@@ -287,8 +297,6 @@ export interface LeaveDocument {
   r2_key: string
   first_page_id: string
   received_at: string
-  mail_from: string | null
-  subject: string | null
   page_count: number
   unlinked_count: number
   linked_count: number
@@ -351,6 +359,10 @@ export function createLeaveApi(fetcher: Fetcher) {
     async listDepartments(): Promise<Department[]> {
       const r = await fetcher<{ data: Department[] }>(`${API_BASE}/leave/departments`)
       return r.data
+    },
+    async listAlerts(): Promise<LeaveAlert[]> {
+      const r = await fetcher<{ alerts: LeaveAlert[] }>(`${API_BASE}/leave/alerts`)
+      return r.alerts
     },
     getCalendar(employeeCd: string, month: string): Promise<CalendarResponse> {
       return fetcher<CalendarResponse>(`${API_BASE}/leave/calendar`, {

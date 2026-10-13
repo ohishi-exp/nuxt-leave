@@ -65,18 +65,16 @@ onMounted(load)
           <thead class="bg-(--ui-bg-elevated) text-left">
             <tr>
               <th class="px-3 py-2">受信日時</th>
-              <th class="px-3 py-2">差出人</th>
-              <th class="px-3 py-2">件名</th>
               <th class="px-3 py-2 text-right">ページ数</th>
               <th class="px-3 py-2 text-right">未紐づけ</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="5" class="px-3 py-6 text-center text-(--ui-text-muted)">読み込み中…</td>
+              <td colspan="3" class="px-3 py-6 text-center text-(--ui-text-muted)">読み込み中…</td>
             </tr>
             <tr v-else-if="docs.length === 0">
-              <td colspan="5" class="px-3 py-6 text-center text-(--ui-text-muted)">ありません</td>
+              <td colspan="3" class="px-3 py-6 text-center text-(--ui-text-muted)">ありません</td>
             </tr>
             <tr
               v-for="d in docs"
@@ -86,8 +84,6 @@ onMounted(load)
               @click="navigateTo(`/pages/${d.first_page_id}`)"
             >
               <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(d.received_at) }}</td>
-              <td class="px-3 py-2">{{ d.mail_from ?? '' }}</td>
-              <td class="px-3 py-2">{{ d.subject ?? '' }}</td>
               <td class="px-3 py-2 text-right">{{ d.page_count }}</td>
               <td class="px-3 py-2 text-right">{{ d.unlinked_count }}</td>
             </tr>
