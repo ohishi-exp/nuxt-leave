@@ -1,14 +1,14 @@
 import { useAuth } from '@ippoan/auth-client'
 import { createLeaveApi, errorStatus, type Fetcher } from '~/utils/leave-api'
+import { createMachineCredentialApi } from '~/utils/machine-credentials'
 
 /**
- * 画面用の API。$fetch に browser JWT (Bearer) を載せ、401 (ログイン切れ) なら
- * 認証状態を捨てて /login へ戻す。
+ * $fetch に browser JWT (Bearer) を載せ、401 (ログイン切れ) なら認証状態を捨てて /login へ戻す fetcher。
  */
-export function useLeaveApi() {
+function useAuthedFetcher(): Fetcher {
   const { token, clearAuth } = useAuth()
 
-  const fetcher: Fetcher = async <T>(url: string, options: Parameters<Fetcher>[1] = {}) => {
+  return async <T>(url: string, options: Parameters<Fetcher>[1] = {}) => {
     const headers: Record<string, string> = {}
     if (token.value) headers.Authorization = `Bearer ${token.value}`
     try {
@@ -28,6 +28,14 @@ export function useLeaveApi() {
       throw e
     }
   }
+}
 
-  return createLeaveApi(fetcher)
+/** 画面用の API (/api/proxy 経由で rust-leave-worker・rust-alc-api) */
+export function useLeaveApi() {
+  return createLeaveApi(useAuthedFetcher())
+}
+
+/** スキャン送信用の資格情報の管理 API (auth-worker を直接叩く。同じ JWT) */
+export function useMachineCredentialApi() {
+  return createMachineCredentialApi(useAuthedFetcher(), String(useRuntimeConfig().public.authWorkerUrl ?? ''))
 }
