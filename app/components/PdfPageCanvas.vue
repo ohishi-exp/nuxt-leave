@@ -8,7 +8,9 @@ const props = withDefaults(defineProps<{
   doc: PDFDocumentProxy | null
   pageNo: number
   scale?: number
-}>(), { scale: 0.4 })
+  /** true なら欄の幅いっぱいに縮めて表示する (描画は scale のまま) */
+  fit?: boolean
+}>(), { scale: 0.4, fit: false })
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const error = ref('')
@@ -33,7 +35,7 @@ async function render() {
     const ratio = window.devicePixelRatio || 1
     el.width = Math.floor(viewport.width * ratio)
     el.height = Math.floor(viewport.height * ratio)
-    el.style.width = `${Math.floor(viewport.width)}px`
+    if (!props.fit) el.style.width = `${Math.floor(viewport.width)}px`
     const ctx = el.getContext('2d')
     if (!ctx) return
     task = page.render({
@@ -62,7 +64,7 @@ onBeforeUnmount(() => task?.cancel())
   <div class="space-y-1">
     <p v-if="error" class="text-sm text-(--ui-error)">{{ error }}</p>
     <div class="relative overflow-auto rounded border border-(--ui-border) bg-white">
-      <canvas ref="canvas" class="block max-w-none" />
+      <canvas ref="canvas" class="block" :class="fit ? 'h-auto w-full' : 'max-w-none'" />
       <span v-if="rendering" class="absolute left-1 top-1 text-xs text-(--ui-text-muted)">描画中…</span>
     </div>
   </div>
