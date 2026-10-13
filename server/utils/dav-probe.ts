@@ -54,7 +54,8 @@ export function summarizeRequest(method: string, path: string, headers: Headers)
     path,
     authScheme: authScheme(headers.get('authorization')),
     headers: picked,
-    headerNames: [...headers.keys()].sort(),
+    // Workers は小文字で返すが、実装によっては元の大小を保つので揃える
+    headerNames: [...headers.keys()].map(k => k.toLowerCase()).sort(),
   }
 }
 
