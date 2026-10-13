@@ -16,6 +16,7 @@ import {
   readBodyLimited,
   type DavOutcome,
   type InboxBucket,
+  type LeaveFetcher,
   type MachineCredentialRpc,
 } from '../../utils/dav'
 
@@ -23,6 +24,8 @@ interface DavEnv {
   INTERNAL_SHARED_SECRET: unknown
   AUTH_MCRED: MachineCredentialRpc
   LEAVE_INBOX: InboxBucket
+  /** 受信アドレス照合用 (preview env には置かない → 無ければ PUT は 503) */
+  LEAVE_WORKER?: LeaveFetcher
 }
 
 export default defineEventHandler(async (event) => {
@@ -30,10 +33,11 @@ export default defineEventHandler(async (event) => {
   const path = getRequestURL(event).pathname
   const authorization = req.headers.get('authorization')
   const env = cfEnv<DavEnv>(event)
+  const secret = await resolveSecret(env.INTERNAL_SHARED_SECRET)
 
   let bodyBytes = 0
   let outcome: DavOutcome
-  if (!isRelayed(req.headers.get('x-internal-shared-secret'), await resolveSecret(env.INTERNAL_SHARED_SECRET))) {
+  if (!isRelayed(req.headers.get('x-internal-shared-secret'), secret)) {
     await req.body?.cancel()
     outcome = NOT_RELAYED
   }
@@ -45,6 +49,8 @@ export default defineEventHandler(async (event) => {
       mcred: env.AUTH_MCRED,
       inbox: env.LEAVE_INBOX,
       uuid: () => crypto.randomUUID(),
+      leave: env.LEAVE_WORKER,
+      secret,
     })
   }
   else {

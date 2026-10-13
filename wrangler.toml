@@ -39,6 +39,12 @@ binding = "AUTH_MCRED"
 service = "auth-worker"
 entrypoint = "MachineCredentialEntrypoint"
 
+# /dav/** の PUT が受信アドレスと会社を照合する rust-leave-worker の内部口 (/internal/scan-check)。
+# preview env には置かない (preview は branch ごとの公開 host を持ち、binding を置くと届く面だけ増える)。
+[[services]]
+binding = "LEAVE_WORKER"
+service = "rust-leave-worker"
+
 # /dav/** が受けた PDF の置き場。R2 通知 → Queue → rust-leave-worker が取り込む。
 [[r2_buckets]]
 binding = "LEAVE_INBOX"
@@ -74,6 +80,10 @@ service = "auth-worker-staging"
 binding = "AUTH_MCRED"
 service = "auth-worker-staging"
 entrypoint = "MachineCredentialEntrypoint"
+
+[[env.staging.services]]
+binding = "LEAVE_WORKER"
+service = "rust-leave-worker-staging"
 
 [[env.staging.r2_buckets]]
 binding = "LEAVE_INBOX"
