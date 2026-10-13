@@ -106,10 +106,10 @@ describe('createLeaveApi', () => {
   })
 
   it('settings の GET / PUT', async () => {
-    const { fetcher, calls } = fakeFetcher({ mailbox: 'abc' })
+    const { fetcher, calls } = fakeFetcher({ grace_days: 3 })
     const api = createLeaveApi(fetcher)
-    expect(await api.getSettings()).toEqual({ mailbox: 'abc' })
-    const body = { mailbox: 'abc', allowed_senders: [], dept_codes: [], lineworks_channel_id: null, notify_recipient_id: null, notify_bot_config_id: null, grace_days: 7, enabled: true }
+    expect(await api.getSettings()).toEqual({ grace_days: 3 })
+    const body = { dept_codes: [], lineworks_channel_id: null, notify_recipient_id: null, notify_bot_config_id: null, grace_days: 7, enabled: true }
     await api.putSettings(body)
     expect(calls[1]).toEqual({ url: '/api/proxy/api/leave/settings', options: { method: 'PUT', body } })
   })
@@ -150,8 +150,6 @@ describe('エラーの文', () => {
   it('既知の語は日本語、知らない語はそのまま', () => {
     expect(errorMessage({ status: 400, data: { error: 'half_day_must_be_single_day' } }))
       .toBe('半日は開始日と終了日が同じ日のときだけ選べます')
-    expect(errorMessage({ status: 409, data: { error: 'mailbox_taken' } }))
-      .toBe('この受信アドレスは他の会社が使っています')
     expect(errorMessage({ status: 400, data: { error: 'unknown_notify_recipient' } })).toBe('選んだ個人が見つかりません')
     expect(errorMessage({ status: 400, data: { error: 'unknown_notify_bot' } })).toBe('選んだ bot が使えません')
     expect(errorMessage({ status: 400, data: { error: 'notify_bot_without_recipient' } })).toBe('bot は個人を選んだときだけ指定できます')
