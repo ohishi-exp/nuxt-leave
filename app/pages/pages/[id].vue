@@ -166,10 +166,6 @@ onMounted(() => {
         <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt class="text-(--ui-text-muted)">受信日時</dt>
           <dd>{{ formatDateTime(head.received_at) }}</dd>
-          <dt class="text-(--ui-text-muted)">差出人</dt>
-          <dd>{{ head.mail_from ?? '' }}</dd>
-          <dt class="text-(--ui-text-muted)">件名</dt>
-          <dd>{{ head.subject ?? '' }}</dd>
           <dt class="text-(--ui-text-muted)">進み具合</dt>
           <dd>全 {{ rows.length }} ページ中 未紐づけ {{ unlinkedCount }}</dd>
         </dl>

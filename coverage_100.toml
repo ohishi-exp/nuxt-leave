@@ -51,3 +51,7 @@ branches = true
 [[files]]
 path = "app/utils/machine-credentials.ts"
 branches = true
+
+[[files]]
+path = "app/utils/leave-alerts.ts"
+branches = true

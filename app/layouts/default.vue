@@ -6,6 +6,7 @@ const links = [
   { label: 'カレンダー', to: '/calendar', icon: 'i-lucide-calendar-days' },
   { label: '有給台帳', to: '/grants', icon: 'i-lucide-book-open' },
   { label: '期首残', to: '/opening', icon: 'i-lucide-list-checks' },
+  { label: '漏れ', to: '/alerts', icon: 'i-lucide-triangle-alert' },
   { label: '設定', to: '/settings', icon: 'i-lucide-settings' },
 ]
 
