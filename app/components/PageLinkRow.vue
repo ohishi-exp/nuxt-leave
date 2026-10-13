@@ -89,7 +89,7 @@ defineExpose({ focusEmployee, scrollHere })
 <template>
   <div
     ref="root"
-    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[15rem_minmax(0,1fr)]"
+    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_22rem]"
     :class="page.status === 'unlinked' ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
   >
     <div class="space-y-1">
@@ -108,7 +108,7 @@ defineExpose({ focusEmployee, scrollHere })
         @click="zoomOpen = true"
       >
         <ClientOnly>
-          <PdfPageCanvas :doc="doc" :page-no="page.page_no" :scale="0.4" />
+          <PdfPageCanvas :doc="doc" :page-no="page.page_no" :scale="1.5" fit />
         </ClientOnly>
       </button>
       <UModal v-model:open="zoomOpen" :title="`${page.page_no} ページ目`">
