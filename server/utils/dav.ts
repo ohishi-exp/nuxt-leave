@@ -7,7 +7,9 @@
  * PDF を受けたら sha256 を計算し、auth-worker の RPC `issueTicket` に Authorization ごと渡して
  * チケットを貰い、R2 (leave-inbox) に customMetadata.ticket 付きで置く。会社の判定はしない
  * (チケットは auth-worker が作り、rust-leave-worker が auth-worker に検証させる)。
- * URL のフォルダ (`/dav/ohishi`) も会社の判定には使わない。
+ * 会社は資格情報だけで決まるので、URL の受信アドレス (`/dav/<mailbox>/<file>` の mailbox) が
+ * その会社のものかを rust-leave-worker の内部口 (service binding LEAVE_WORKER) で照合し、
+ * 食い違えば put せず 403 を返す (誤送信を受け取り時に弾く)。
  *
  * 機械の入口は auth-worker の `/m/leave-scan/<rest>` 1 か所で、auth-worker が Basic を照合してから
  * Service Binding でここ (`/dav/<rest>`) へ中継する。中継は `X-Internal-Shared-Secret`
@@ -42,6 +44,8 @@ export type DavKind =
   | 'empty'
   | 'too_large'
   | 'rejected'
+  | 'mailbox_missing'
+  | 'mailbox_mismatch'
   | 'stored'
   | 'upstream_error'
   | 'propfind'
@@ -77,11 +81,26 @@ export interface InboxBucket {
   ): Promise<unknown>
 }
 
+/** rust-leave-worker への service binding (LEAVE_WORKER) の使う分だけ */
+export interface LeaveFetcher {
+  fetch(
+    url: string,
+    init: { method: string, headers: Record<string, string>, body: string },
+  ): Promise<{ status: number }>
+}
+
 export interface DavDeps {
   mcred: MachineCredentialRpc
   inbox: InboxBucket
   uuid: () => string
+  /** 受信アドレス照合の相手 (binding が無ければ null/undefined → 503) */
+  leave: LeaveFetcher | null | undefined
+  /** `X-Internal-Shared-Secret` に載せる INTERNAL_SHARED_SECRET */
+  secret: string | null | undefined
 }
+
+/** 照合の内部口。URL の host は名目で、path はこれに固定する (利用者の path・header は中継しない)。 */
+export const SCAN_CHECK_URL = 'https://leave-worker/internal/scan-check'
 
 const unauthorized = (): DavOutcome => ({
   kind: 'unauthorized',
@@ -180,6 +199,29 @@ export function originalName(path: string): string {
   return name === '' ? 'scan.pdf' : name
 }
 
+/**
+ * `/dav/<mailbox>/<file>` の 1 要素目 (受信アドレス) を decode して返す。
+ * 1 要素目が無い (`/dav/<file>` だけ)・decode が例外・空になるときは null。
+ */
+export function mailboxOf(path: string): string | null {
+  const parts = path.split('/').filter(p => p !== '')
+  const rest = parts[0] === 'dav' ? parts.slice(1) : parts
+  if (rest.length < 2) return null
+  try {
+    return decodeURIComponent(rest[0]!) || null
+  }
+  catch {
+    return null
+  }
+}
+
+/** scan-check の応答 status を結果に写す: 204 一致 / 403 不一致 / それ以外 (400・401・5xx) は設定ミスなので error。 */
+export function scanCheckResult(status: number): 'match' | 'mismatch' | 'error' {
+  if (status === 204) return 'match'
+  if (status === 403) return 'mismatch'
+  return 'error'
+}
+
 /** inbox の key。同じ名前で何度送っても上書きされないよう UUID を前置し、拡張子は .pdf に揃える。 */
 export function inboxKey(uuid: string, name: string): string {
   return /\.pdf$/i.test(name) ? `${uuid}-${name}` : `${uuid}-${name}.pdf`
@@ -245,6 +287,20 @@ export async function handlePut(
     const sha256 = await sha256Hex(body)
     const issued = await deps.mcred.issueTicket(authorization, PURPOSE, sha256)
     if (!issued) return { ...unauthorized(), kind: 'rejected' }
+
+    // 受信アドレスと会社の照合 (R2 に置く前)。401 は返さない (複合機が認証をやり直し続けるため)
+    const mailbox = mailboxOf(path)
+    if (mailbox === null) return { kind: 'mailbox_missing', reply: { status: 403, headers: {} } }
+    if (!deps.leave || !deps.secret) throw new Error('LEAVE_WORKER binding or secret missing')
+    const res = await deps.leave.fetch(SCAN_CHECK_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Internal-Shared-Secret': deps.secret },
+      body: JSON.stringify({ mailbox, tenant_id: issued.tenantId }),
+    })
+    const check = scanCheckResult(res.status)
+    if (check === 'mismatch') return { kind: 'mailbox_mismatch', reply: { status: 403, headers: {} } }
+    if (check === 'error') throw new Error(`scan-check status ${res.status}`)
+
     await deps.inbox.put(inboxKey(deps.uuid(), originalName(path)), body, {
       httpMetadata: { contentType: 'application/pdf' },
       customMetadata: { ticket: issued.ticket },
