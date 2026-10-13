@@ -43,6 +43,10 @@ export function revokeUrl(authWorkerUrl: string, username: string): string {
   return `${base(authWorkerUrl)}/${encodeURIComponent(username)}/revoke`
 }
 
+export function rotateUrl(authWorkerUrl: string, username: string): string {
+  return `${base(authWorkerUrl)}/${encodeURIComponent(username)}/rotate`
+}
+
 /** 一覧の応答は配列か `{ credentials: [...] }` のどちらでも受ける */
 export function toCredentialList(res: unknown): MachineCredential[] {
   const rows = Array.isArray(res)
@@ -63,6 +67,11 @@ export function createMachineCredentialApi(fetcher: Fetcher, authWorkerUrl: stri
     },
     revoke(username: string): Promise<unknown> {
       return fetcher(revokeUrl(authWorkerUrl, username), { method: 'POST' })
+    },
+    /** username はそのまま password だけ新しくする (旧 password は即失効)。新しい password はこの応答だけ。
+     * rotate 前に発行済みの inbox のチケット (TTL 7 日) は username が有効かだけを見るので rotate 後も通る (過去の PUT への印) */
+    rotate(username: string): Promise<IssuedCredential> {
+      return fetcher<IssuedCredential>(rotateUrl(authWorkerUrl, username), { method: 'POST' })
     },
   }
 }
