@@ -4,11 +4,8 @@ import {
   DEFAULT_GRACE_DAYS,
   GRACE_DAYS_MAX,
   GRACE_DAYS_MIN,
-  MAILBOX_DOMAIN,
   channelTarget,
   formToSettingsBody,
-  mailboxAddress,
-  mailboxError,
   notifyBotOptions,
   recipientTarget,
   settingsToForm,
@@ -45,8 +42,6 @@ const config = useRuntimeConfig()
 const authWorkerUrl = String(config.public.authWorkerUrl ?? '')
 
 const form = ref<SettingsForm>({
-  mailbox: '',
-  allowedSendersText: '',
   dept_codes: [],
   notify_target: '',
   notify_bot_config_id: '',
@@ -85,8 +80,6 @@ const credIssuing = ref(false)
 const issued = ref<DeviceSetup | null>(null)
 
 const issuedRows = computed(() => issued.value ? deviceSetupRows(issued.value) : [])
-const address = computed(() => mailboxAddress(form.value.mailbox))
-const mailboxMsg = computed(() => mailboxError(form.value.mailbox))
 const isRecipientTarget = computed(() => form.value.notify_target.startsWith('recipient:'))
 const botOptions = computed(() => notifyBotOptions(bots.value))
 const testBlocker = computed(() => testNotifyBlocker(saved.value, form.value))
@@ -147,7 +140,7 @@ async function issueCred() {
   credIssuing.value = true
   try {
     const c = await credApi.issue(credLabel.value)
-    issued.value = deviceSetup(authWorkerUrl, saved.value?.mailbox, c)
+    issued.value = deviceSetup(authWorkerUrl, c)
     credLabel.value = ''
     await loadCreds()
   }
@@ -283,24 +276,6 @@ onMounted(() => {
       <UCard>
         <template #header><h2 class="font-bold">受け付け</h2></template>
         <div class="space-y-5">
-          <UFormField label="受信アドレス" :error="mailboxMsg ?? undefined">
-            <div class="flex items-center gap-1">
-              <UInput v-model="form.mailbox" placeholder="例: ohishi" class="w-64" />
-              <span class="text-(--ui-text-muted)">@{{ MAILBOX_DOMAIN }}</span>
-            </div>
-            <p class="mt-1 text-sm">
-              <template v-if="address">申請書の PDF はこの宛先に送ってください: <code>{{ address }}</code></template>
-              <template v-else>英小文字・数字・ハイフンの 3〜64 文字。空なら受信しません。</template>
-            </p>
-          </UFormField>
-
-          <UFormField
-            label="受け付ける差出人"
-            description="1 行に 1 アドレス。空なら全部の差出人を拒否します。"
-          >
-            <UTextarea v-model="form.allowedSendersText" :rows="4" class="w-full max-w-lg" placeholder="sender@example.com" />
-          </UFormField>
-
           <UFormField label="乗務員の部門" description="この会社の乗務員の部門を選んでください。紐づけ画面の乗務員はこの部門の人だけになります。">
             <p v-if="departmentsError" class="text-sm text-(--ui-error)">{{ departmentsError }}</p>
             <div v-else class="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">

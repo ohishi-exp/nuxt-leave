@@ -62,8 +62,6 @@ export interface Department {
 }
 
 export interface LeaveSettings {
-  mailbox: string | null
-  allowed_senders: string[]
   dept_codes: string[]
   lineworks_channel_id: string | null
   notify_recipient_id: string | null
@@ -428,8 +426,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_employee_cd: '乗務員の社員C が正しくありません',
   note_too_long: '備考が長すぎます (2000 字まで)',
   too_many_periods: '期間は 50 行までです',
-  invalid_mailbox: '受信アドレスは英小文字・数字・ハイフンの 3〜64 文字です',
-  mailbox_taken: 'この受信アドレスは他の会社が使っています',
   invalid_grace_days: '警告の猶予日数は 0〜60 です',
   unknown_lineworks_channel: '通知先グループが見つかりません',
   unknown_notify_recipient: '選んだ個人が見つかりません',

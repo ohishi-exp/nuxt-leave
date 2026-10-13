@@ -3,7 +3,7 @@ import type { Fetcher } from '~/utils/leave-api'
 import {
   LABEL_MAX,
   MACHINE_ENTRY,
-  MAILBOX_PLACEHOLDER,
+  MACHINE_FOLDER,
   PURPOSE,
   createMachineCredentialApi,
   deviceSetup,
@@ -105,29 +105,25 @@ describe('sortCredentials', () => {
 describe('deviceSetup', () => {
   const cred = { username: 'mc_1', password: 'pw-_x' }
 
-  it('auth-worker の /m/leave-scan/<mailbox> を入口にして複合機の設定と curl を作る', () => {
+  it('auth-worker の /m/leave-scan/scan を入口にして複合機の設定と curl を作る', () => {
     expect(MACHINE_ENTRY).toBe('/m/leave-scan')
-    expect(deviceSetup('https://auth.ippoan.org/', ' ohishi ', cred)).toEqual({
+    expect(MACHINE_FOLDER).toBe('/m/leave-scan/scan')
+    expect(deviceSetup('https://auth.ippoan.org/', cred)).toEqual({
       protocol: 'WebDAV',
       host: 'https://auth.ippoan.org',
-      folder: '/m/leave-scan/ohishi',
+      folder: '/m/leave-scan/scan',
       username: 'mc_1',
       password: 'pw-_x',
-      curl: 'curl -T test.pdf -u mc_1:pw-_x https://auth.ippoan.org/m/leave-scan/ohishi/test.pdf', // gitleaks:allow (テスト用のダミー値)
+      curl: 'curl -T test.pdf -u mc_1:pw-_x https://auth.ippoan.org/m/leave-scan/scan/test.pdf', // gitleaks:allow (テスト用のダミー値)
     })
   })
   it('行にすると複合機の画面の順', () => {
-    expect(deviceSetupRows(deviceSetup('https://auth-staging.ippoan.org', 'ohishi', cred))).toEqual([
+    expect(deviceSetupRows(deviceSetup('https://auth-staging.ippoan.org', cred))).toEqual([
       ['プロトコル', 'WebDAV'],
       ['ホスト名', 'https://auth-staging.ippoan.org'],
-      ['フォルダへのパス', '/m/leave-scan/ohishi'],
+      ['フォルダへのパス', '/m/leave-scan/scan'],
       ['ユーザー名', 'mc_1'],
       ['パスワード', 'pw-_x'],
     ])
-  })
-  it('mailbox が空なら仮置き', () => {
-    expect(deviceSetup('https://auth-staging.ippoan.org', null, cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
-    expect(deviceSetup('https://x', ' ', cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
-    expect(deviceSetup('https://x', undefined, cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
   })
 })

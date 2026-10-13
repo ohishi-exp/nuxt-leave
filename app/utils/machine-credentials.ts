@@ -102,20 +102,19 @@ export interface DeviceSetup {
   curl: string
 }
 
-/** mailbox が空のときの仮置き */
-export const MAILBOX_PLACEHOLDER = '<受信アドレス>'
-
 /** auth-worker の機械用の入口 (Basic を照合して nuxt-leave の /dav へ中継する) */
 export const MACHINE_ENTRY = '/m/leave-scan'
+
+/** 複合機のフォルダ。会社は資格情報だけで決まるので、残りのパスは何でもよい */
+export const MACHINE_FOLDER = `${MACHINE_ENTRY}/scan`
 
 /**
  * 発行直後に出す複合機の設定例と、PC から試す curl。
  * host は auth-worker (本番 https://auth.ippoan.org / staging https://auth-staging.ippoan.org)。
  */
-export function deviceSetup(authWorkerUrl: string, mailbox: string | null | undefined, cred: IssuedCredential): DeviceSetup {
+export function deviceSetup(authWorkerUrl: string, cred: IssuedCredential): DeviceSetup {
   const host = authWorkerUrl.replace(/\/+$/, '')
-  const box = mailbox?.trim() || MAILBOX_PLACEHOLDER
-  const folder = `${MACHINE_ENTRY}/${box}`
+  const folder = MACHINE_FOLDER
   return {
     protocol: 'WebDAV',
     host,
