@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { errorMessage, isForbidden, type BotConfig, type Department, type LineworksChannel, type NotifyRecipient } from '~/utils/leave-api'
+import { errorMessage, errorStatus, isForbidden, type BotConfig, type Department, type LineworksChannel, type NotifyRecipient } from '~/utils/leave-api'
 import {
   DEFAULT_GRACE_DAYS,
   GRACE_DAYS_MAX,
@@ -166,6 +166,24 @@ async function revokeCred(c: MachineCredential) {
   }
   catch (e) {
     credsError.value = errorMessage(e)
+  }
+}
+
+const rotatingUsername = ref('')
+
+async function rotateCred(c: MachineCredential) {
+  if (!confirm(`「${c.label}」(${c.username}) のパスワードを作り直します。今のパスワードはすぐ使えなくなります。複合機のパスワード欄を新しいものに入れ替えてください。`)) return
+  rotatingUsername.value = c.username
+  try {
+    const r = await credApi.rotate(c.username)
+    issued.value = deviceSetup(authWorkerUrl, r)
+    await loadCreds()
+  }
+  catch (e) {
+    credsError.value = errorStatus(e) === 404 ? 'この資格情報は失効しているか見つかりません' : errorMessage(e)
+  }
+  finally {
+    rotatingUsername.value = ''
   }
 }
 
@@ -455,7 +473,10 @@ onMounted(() => {
                 <td>{{ formatIssuedDate(c.created_at) }}</td>
                 <td class="text-right">
                   <UBadge v-if="c.revoked" label="失効済み" color="neutral" variant="subtle" />
-                  <UButton v-else label="失効" size="xs" color="error" variant="ghost" @click="revokeCred(c)" />
+                  <template v-else>
+                    <UButton label="パスワードを再発行" size="xs" variant="ghost" :loading="rotatingUsername === c.username" :disabled="rotatingUsername !== ''" @click="rotateCred(c)" />
+                    <UButton label="失効" size="xs" color="error" variant="ghost" @click="revokeCred(c)" />
+                  </template>
                 </td>
               </tr>
             </tbody>

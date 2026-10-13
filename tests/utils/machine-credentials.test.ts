@@ -12,6 +12,7 @@ import {
   labelError,
   listUrl,
   revokeUrl,
+  rotateUrl,
   sortCredentials,
   toCredentialList,
   type MachineCredential,
@@ -34,6 +35,7 @@ describe('URL', () => {
   it('末尾の / を落として組み立てる', () => {
     expect(listUrl('https://auth.ippoan.org/')).toBe('https://auth.ippoan.org/api/machine-credentials')
     expect(revokeUrl('https://auth.ippoan.org', 'mc_a/b')).toBe('https://auth.ippoan.org/api/machine-credentials/mc_a%2Fb/revoke')
+    expect(rotateUrl('https://auth.ippoan.org/', 'mc_a/b')).toBe('https://auth.ippoan.org/api/machine-credentials/mc_a%2Fb/rotate')
   })
 })
 
@@ -69,6 +71,15 @@ describe('createMachineCredentialApi', () => {
     const { fetcher, calls } = fakeFetcher({})
     await createMachineCredentialApi(fetcher, URL).revoke('mc_1')
     expect(calls[0]).toEqual({ url: `${URL}/api/machine-credentials/mc_1/revoke`, options: { method: 'POST' } })
+  })
+})
+
+describe('rotate', () => {
+  it('POST して新しい password を返す', async () => {
+    const { fetcher, calls } = fakeFetcher({ username: 'mc_1', password: 'new' })
+    const api = createMachineCredentialApi(fetcher, 'https://auth-staging.ippoan.org')
+    expect(await api.rotate('mc_1')).toEqual({ username: 'mc_1', password: 'new' })
+    expect(calls[0]).toEqual({ url: 'https://auth-staging.ippoan.org/api/machine-credentials/mc_1/rotate', options: { method: 'POST' } })
   })
 })
 
