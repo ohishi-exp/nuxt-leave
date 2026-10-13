@@ -147,7 +147,7 @@ async function issueCred() {
   credIssuing.value = true
   try {
     const c = await credApi.issue(credLabel.value)
-    issued.value = deviceSetup(window.location.origin, saved.value?.mailbox, c)
+    issued.value = deviceSetup(authWorkerUrl, saved.value?.mailbox, c)
     credLabel.value = ''
     await loadCreds()
   }

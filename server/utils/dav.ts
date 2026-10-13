@@ -9,7 +9,11 @@
  * (チケットは auth-worker が作り、rust-leave-worker が auth-worker に検証させる)。
  * URL のフォルダ (`/dav/ohishi`) も会社の判定には使わない。
  *
- * ログに Authorization・チケット・本文は出さない。
+ * 機械の入口は auth-worker の `/m/leave-scan/<rest>` 1 か所で、auth-worker が Basic を照合してから
+ * Service Binding でここ (`/dav/<rest>`) へ中継する。中継は `X-Internal-Shared-Secret`
+ * (= INTERNAL_SHARED_SECRET) を付けてくるので、一致しないものは 404 で存在を見せない。
+ *
+ * ログに Authorization・チケット・共有秘密・本文は出さない。
  */
 
 /** PUT の本文の上限 (1 枚約 46KB。まとめて送っても十分な余裕) */
@@ -32,6 +36,7 @@ export interface DavReply {
 
 /** ログに出す結果の種類 */
 export type DavKind =
+  | 'not_relayed'
   | 'options'
   | 'unauthorized'
   | 'empty'
@@ -82,6 +87,24 @@ const unauthorized = (): DavOutcome => ({
   kind: 'unauthorized',
   reply: { status: 401, headers: { 'WWW-Authenticate': WWW_AUTHENTICATE } },
 })
+
+/** auth-worker からの中継でないときの応答 (存在を見せない) */
+export const NOT_RELAYED: DavOutcome = { kind: 'not_relayed', reply: { status: 404, headers: {} } }
+
+/**
+ * `X-Internal-Shared-Secret` が INTERNAL_SHARED_SECRET と一致するか (auth-worker からの中継か)。
+ * どちらかが無い・空なら偽。比較は定数時間 (長さの違いも全バイト見てから偽にする)。
+ */
+export function isRelayed(header: string | null | undefined, secret: string | null | undefined): boolean {
+  if (!header || !secret) return false
+  const enc = new TextEncoder()
+  const a = enc.encode(header)
+  const b = enc.encode(secret)
+  let diff = a.length ^ b.length
+  const n = Math.max(a.length, b.length)
+  for (let i = 0; i < n; i++) diff |= (a[i % a.length]! ^ b[i % b.length]!)
+  return diff === 0
+}
 
 /** Authorization ヘッダーが付いているか (値の検証は auth-worker がする) */
 export function hasAuthorization(header: string | null | undefined): header is string {

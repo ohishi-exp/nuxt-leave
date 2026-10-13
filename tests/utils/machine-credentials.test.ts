@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import type { Fetcher } from '~/utils/leave-api'
 import {
   LABEL_MAX,
+  MACHINE_ENTRY,
   MAILBOX_PLACEHOLDER,
   PURPOSE,
   createMachineCredentialApi,
@@ -104,28 +105,29 @@ describe('sortCredentials', () => {
 describe('deviceSetup', () => {
   const cred = { username: 'mc_1', password: 'pw-_x' }
 
-  it('origin と mailbox から複合機の設定と curl を作る', () => {
-    expect(deviceSetup('https://leave.ippoan.org/', ' ohishi ', cred)).toEqual({
+  it('auth-worker の /m/leave-scan/<mailbox> を入口にして複合機の設定と curl を作る', () => {
+    expect(MACHINE_ENTRY).toBe('/m/leave-scan')
+    expect(deviceSetup('https://auth.ippoan.org/', ' ohishi ', cred)).toEqual({
       protocol: 'WebDAV',
-      host: 'https://leave.ippoan.org',
-      folder: '/dav/ohishi',
+      host: 'https://auth.ippoan.org',
+      folder: '/m/leave-scan/ohishi',
       username: 'mc_1',
       password: 'pw-_x',
-      curl: 'curl -T test.pdf -u mc_1:pw-_x https://leave.ippoan.org/dav/ohishi/test.pdf', // gitleaks:allow (テスト用のダミー値)
+      curl: 'curl -T test.pdf -u mc_1:pw-_x https://auth.ippoan.org/m/leave-scan/ohishi/test.pdf', // gitleaks:allow (テスト用のダミー値)
     })
   })
   it('行にすると複合機の画面の順', () => {
-    expect(deviceSetupRows(deviceSetup('https://leave.ippoan.org', 'ohishi', cred))).toEqual([
+    expect(deviceSetupRows(deviceSetup('https://auth-staging.ippoan.org', 'ohishi', cred))).toEqual([
       ['プロトコル', 'WebDAV'],
-      ['ホスト名', 'https://leave.ippoan.org'],
-      ['フォルダへのパス', '/dav/ohishi'],
+      ['ホスト名', 'https://auth-staging.ippoan.org'],
+      ['フォルダへのパス', '/m/leave-scan/ohishi'],
       ['ユーザー名', 'mc_1'],
       ['パスワード', 'pw-_x'],
     ])
   })
   it('mailbox が空なら仮置き', () => {
-    expect(deviceSetup('https://leave-staging.ippoan.org', null, cred).folder).toBe(`/dav/${MAILBOX_PLACEHOLDER}`)
-    expect(deviceSetup('https://x', ' ', cred).folder).toBe(`/dav/${MAILBOX_PLACEHOLDER}`)
-    expect(deviceSetup('https://x', undefined, cred).folder).toBe(`/dav/${MAILBOX_PLACEHOLDER}`)
+    expect(deviceSetup('https://auth-staging.ippoan.org', null, cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
+    expect(deviceSetup('https://x', ' ', cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
+    expect(deviceSetup('https://x', undefined, cred).folder).toBe(`/m/leave-scan/${MAILBOX_PLACEHOLDER}`)
   })
 })

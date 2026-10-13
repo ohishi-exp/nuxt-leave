@@ -2,9 +2,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   MAX_PUT_BYTES,
+  NOT_RELAYED,
   handlePut,
   hasAuthorization,
   inboxKey,
+  isRelayed,
   logLine,
   looksLikeFile,
   originalName,
@@ -32,6 +34,28 @@ function deps(issued: Awaited<ReturnType<DavDeps['mcred']['issueTicket']>> = { t
   const d: DavDeps = { mcred: { issueTicket }, inbox: { put }, uuid: () => 'uuid-1' }
   return { d, issueTicket, put }
 }
+
+describe('isRelayed', () => {
+  it('共有秘密と一致するときだけ真', () => {
+    expect(isRelayed('s3cret', 's3cret')).toBe(true)
+    expect(isRelayed('s3cret', 's3creT')).toBe(false)
+  })
+  it('長さが違えば偽 (前方一致・繰り返しも通さない)', () => {
+    expect(isRelayed('s3c', 's3cret')).toBe(false)
+    expect(isRelayed('s3crets3cret', 's3cret')).toBe(false)
+    expect(isRelayed('abab', 'ab')).toBe(false)
+  })
+  it('どちらかが無い・空なら偽', () => {
+    expect(isRelayed(null, 's')).toBe(false)
+    expect(isRelayed('', 's')).toBe(false)
+    expect(isRelayed('s', null)).toBe(false)
+    expect(isRelayed('s', undefined)).toBe(false)
+    expect(isRelayed(undefined, '')).toBe(false)
+  })
+  it('中継でないときは 404 で存在を見せない', () => {
+    expect(NOT_RELAYED).toEqual({ kind: 'not_relayed', reply: { status: 404, headers: {} } })
+  })
+})
 
 describe('hasAuthorization', () => {
   it('空でない文字列だけ真', () => {

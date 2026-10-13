@@ -1,13 +1,16 @@
 /**
  * 複合機の WebDAV 送信を受ける /dav/**。判定は server/utils/dav.ts。
+ * auth-worker の `/m/leave-scan/**` からの中継 (X-Internal-Shared-Secret 付き) だけを処理し、それ以外は 404。
  * PUT の PDF は auth-worker の RPC でチケットを貰い、R2 (LEAVE_INBOX) に置く。
  * 取り込みは R2 通知 → Queue → rust-leave-worker。
  */
 import { defineEventHandler, getRequestURL, setResponseHeaders, setResponseStatus, toWebRequest } from 'h3'
-import { cfEnv } from '../../utils/cf-env'
+import { cfEnv, resolveSecret } from '../../utils/cf-env'
 import {
+  NOT_RELAYED,
   handlePut,
   hasAuthorization,
+  isRelayed,
   logLine,
   planReply,
   readBodyLimited,
@@ -17,6 +20,7 @@ import {
 } from '../../utils/dav'
 
 interface DavEnv {
+  INTERNAL_SHARED_SECRET: unknown
   AUTH_MCRED: MachineCredentialRpc
   LEAVE_INBOX: InboxBucket
 }
@@ -25,14 +29,18 @@ export default defineEventHandler(async (event) => {
   const req = toWebRequest(event)
   const path = getRequestURL(event).pathname
   const authorization = req.headers.get('authorization')
+  const env = cfEnv<DavEnv>(event)
 
   let bodyBytes = 0
   let outcome: DavOutcome
+  if (!isRelayed(req.headers.get('x-internal-shared-secret'), await resolveSecret(env.INTERNAL_SHARED_SECRET))) {
+    await req.body?.cancel()
+    outcome = NOT_RELAYED
+  }
   // PUT は認証が付いているときだけ本文を読む (無ければ planReply が 401 を返す)
-  if (event.method.toUpperCase() === 'PUT' && hasAuthorization(authorization)) {
+  else if (event.method.toUpperCase() === 'PUT' && hasAuthorization(authorization)) {
     const body = await readBodyLimited(req.body, req.headers.get('content-length'))
     bodyBytes = body?.byteLength ?? Number(req.headers.get('content-length') ?? 0)
-    const env = cfEnv<DavEnv>(event)
     outcome = await handlePut(path, authorization, body, {
       mcred: env.AUTH_MCRED,
       inbox: env.LEAVE_INBOX,
