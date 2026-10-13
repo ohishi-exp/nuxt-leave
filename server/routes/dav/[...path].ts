@@ -1,41 +1,60 @@
 /**
- * 複合機の WebDAV 送信を受ける試験用の受け口 (/dav/**)。判定は server/utils/dav-probe.ts。
- * 届いたリクエストの形をログに 1 行出して応答するだけで、本文は読み捨てる。
+ * 複合機の WebDAV 送信を受ける /dav/**。判定は server/utils/dav.ts。
+ * auth-worker の `/m/leave-scan/**` からの中継 (X-Internal-Shared-Secret 付き) だけを処理し、それ以外は 404。
+ * PUT の PDF は auth-worker の RPC でチケットを貰い、R2 (LEAVE_INBOX) に置く。
+ * 取り込みは R2 通知 → Queue → rust-leave-worker。
  */
 import { defineEventHandler, getRequestURL, setResponseHeaders, setResponseStatus, toWebRequest } from 'h3'
-import { planReply, summarizeRequest } from '../../utils/dav-probe'
+import { cfEnv, resolveSecret } from '../../utils/cf-env'
+import {
+  NOT_RELAYED,
+  handlePut,
+  hasAuthorization,
+  isRelayed,
+  logLine,
+  planReply,
+  readBodyLimited,
+  type DavOutcome,
+  type InboxBucket,
+  type MachineCredentialRpc,
+} from '../../utils/dav'
 
-/** PROPFIND などの XML 本文は先頭だけログに出す (PUT の本文は出さない)。 */
-const XML_LOG_LIMIT = 500
+interface DavEnv {
+  INTERNAL_SHARED_SECRET: unknown
+  AUTH_MCRED: MachineCredentialRpc
+  LEAVE_INBOX: InboxBucket
+}
 
 export default defineEventHandler(async (event) => {
   const req = toWebRequest(event)
   const path = getRequestURL(event).pathname
-  const summary = summarizeRequest(event.method, path, req.headers)
+  const authorization = req.headers.get('authorization')
+  const env = cfEnv<DavEnv>(event)
 
   let bodyBytes = 0
-  let xmlHead: string | undefined
-  if (req.body) {
-    const isXml = (req.headers.get('content-type') ?? '').includes('xml')
-    const chunks: Uint8Array[] = []
-    const reader = req.body.getReader()
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      bodyBytes += value.byteLength
-      if (isXml && bodyBytes <= XML_LOG_LIMIT * 4) chunks.push(value)
-    }
-    if (isXml) {
-      const text = new TextDecoder().decode(new Uint8Array(chunks.flatMap(c => [...c])))
-      xmlHead = text.slice(0, XML_LOG_LIMIT)
-    }
+  let outcome: DavOutcome
+  if (!isRelayed(req.headers.get('x-internal-shared-secret'), await resolveSecret(env.INTERNAL_SHARED_SECRET))) {
+    await req.body?.cancel()
+    outcome = NOT_RELAYED
+  }
+  // PUT は認証が付いているときだけ本文を読む (無ければ planReply が 401 を返す)
+  else if (event.method.toUpperCase() === 'PUT' && hasAuthorization(authorization)) {
+    const body = await readBodyLimited(req.body, req.headers.get('content-length'))
+    bodyBytes = body?.byteLength ?? Number(req.headers.get('content-length') ?? 0)
+    outcome = await handlePut(path, authorization, body, {
+      mcred: env.AUTH_MCRED,
+      inbox: env.LEAVE_INBOX,
+      uuid: () => crypto.randomUUID(),
+    })
+  }
+  else {
+    await req.body?.cancel()
+    outcome = planReply(event.method, path, hasAuthorization(authorization))
   }
 
-  const reply = planReply(event.method, path, summary.authScheme !== null)
-  // CF Observability は構造化引数を展開しないので 1 行の文字列にする
-  console.log(`dav-probe: ${JSON.stringify({ ...summary, bodyBytes, xmlHead, status: reply.status })}`)
+  console.log(logLine(event.method, path, bodyBytes, outcome))
 
-  setResponseStatus(event, reply.status)
-  setResponseHeaders(event, reply.headers)
-  return reply.body ?? ''
+  setResponseStatus(event, outcome.reply.status)
+  setResponseHeaders(event, outcome.reply.headers)
+  return outcome.reply.body ?? ''
 })

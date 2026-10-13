@@ -9,6 +9,7 @@
 - 型と呼び出しは `app/utils/leave-api.ts` に集約。画面は `useLeaveApi()` (Bearer を載せ、401 で /login)
 - 画面: `/` 一覧 (unlinked/linked/ignored)、`/pages/[id]` 紐づけ (pdfjs-dist で該当ページだけ描く)、`/settings`
 - LINE WORKS の bot / グループは rust-alc-api の既存の口 (`/api/admin/bot/configs`・`/api/notify/lineworks/channels`)
+- 複合機の WebDAV 送信の入口は auth-worker の `/m/leave-scan/**` (Basic を照合して Service Binding で中継)。受けるのは `server/routes/dav/[...path].ts` (判定は `server/utils/dav.ts`) で、`X-Internal-Shared-Secret` が一致しない直アクセスは 404。PUT の PDF は auth-worker の RPC `AUTH_MCRED.issueTicket` でチケットを貰い R2 `LEAVE_INBOX` に置く (会社は決めない)。送信用の資格情報は `/settings` から auth-worker `/api/machine-credentials` を直接叩く
 
 ## テスト
 - 純粋な変換・検証は `app/utils/*.ts` に置き、`tests/utils/` で単体テスト → `coverage_100.toml` に登録 (100%)

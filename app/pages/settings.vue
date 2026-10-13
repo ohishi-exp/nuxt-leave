@@ -27,8 +27,19 @@ import {
   validateBotForm,
   type BotForm,
 } from '~/utils/bot-config'
+import {
+  LABEL_MAX,
+  deviceSetup,
+  deviceSetupRows,
+  formatIssuedDate,
+  labelError,
+  sortCredentials,
+  type DeviceSetup,
+  type MachineCredential,
+} from '~/utils/machine-credentials'
 
 const api = useLeaveApi()
+const credApi = useMachineCredentialApi()
 const toast = useToast()
 const config = useRuntimeConfig()
 const authWorkerUrl = String(config.public.authWorkerUrl ?? '')
@@ -64,6 +75,16 @@ const botSaving = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ok: boolean, message: string } | null>(null)
 
+const creds = ref<MachineCredential[]>([])
+const credsError = ref('')
+const credsForbidden = ref(false)
+const credLabel = ref('')
+const credLabelError = ref<string | null>(null)
+const credIssuing = ref(false)
+/** 発行直後の設定例 (password はここにしか無い。閉じたら二度と出せない) */
+const issued = ref<DeviceSetup | null>(null)
+
+const issuedRows = computed(() => issued.value ? deviceSetupRows(issued.value) : [])
 const address = computed(() => mailboxAddress(form.value.mailbox))
 const mailboxMsg = computed(() => mailboxError(form.value.mailbox))
 const isRecipientTarget = computed(() => form.value.notify_target.startsWith('recipient:'))
@@ -106,6 +127,52 @@ async function loadLineworks() {
   }
   catch (e) {
     lineworksError.value = errorMessage(e)
+  }
+}
+
+async function loadCreds() {
+  credsError.value = ''
+  try {
+    creds.value = sortCredentials(await credApi.list())
+  }
+  catch (e) {
+    credsForbidden.value = isForbidden(e)
+    credsError.value = errorMessage(e)
+  }
+}
+
+async function issueCred() {
+  credLabelError.value = labelError(credLabel.value)
+  if (credLabelError.value) return
+  credIssuing.value = true
+  try {
+    const c = await credApi.issue(credLabel.value)
+    issued.value = deviceSetup(authWorkerUrl, saved.value?.mailbox, c)
+    credLabel.value = ''
+    await loadCreds()
+  }
+  catch (e) {
+    credsForbidden.value = isForbidden(e)
+    credLabelError.value = errorMessage(e)
+  }
+  finally {
+    credIssuing.value = false
+  }
+}
+
+function closeIssued() {
+  if (!confirm('閉じるとパスワードは二度と表示できません。控えましたか？')) return
+  issued.value = null
+}
+
+async function revokeCred(c: MachineCredential) {
+  if (!confirm(`「${c.label}」(${c.username}) を失効させますか？ この資格情報で送れなくなります。`)) return
+  try {
+    await credApi.revoke(c.username)
+    await loadCreds()
+  }
+  catch (e) {
+    credsError.value = errorMessage(e)
   }
 }
 
@@ -200,6 +267,7 @@ onMounted(() => {
   loadSettings()
   loadDepartments()
   loadLineworks()
+  loadCreds()
 })
 </script>
 
@@ -356,6 +424,69 @@ onMounted(() => {
       </UAlert>
 
       <UButton label="設定を保存" icon="i-lucide-save" :loading="saving" @click="save" />
+
+      <UCard>
+        <template #header><h2 class="font-bold">スキャン送信用の資格情報</h2></template>
+        <div v-if="credsForbidden" class="text-sm text-(--ui-text-muted)">管理者だけが操作できます</div>
+        <div v-else class="space-y-4">
+          <p class="text-sm text-(--ui-text-muted)">
+            複合機や PC が申請書の PDF を WebDAV で送るときのユーザー名とパスワードです。
+          </p>
+          <UAlert v-if="credsError" color="error" :title="credsError" />
+
+          <div v-if="issued" class="space-y-3 rounded border border-(--ui-warning) p-3 text-sm">
+            <UAlert
+              color="warning"
+              icon="i-lucide-triangle-alert"
+              title="パスワードはこの画面で 1 回だけ表示します。閉じたら二度と表示できません。"
+            />
+            <h3 class="font-medium">複合機の設定</h3>
+            <dl class="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1">
+              <template v-for="[k, v] in issuedRows" :key="k">
+                <dt class="text-(--ui-text-muted)">{{ k }}</dt>
+                <dd><code class="break-all">{{ v }}</code></dd>
+                <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" aria-label="コピー" @click="copy(v)" />
+              </template>
+            </dl>
+            <h3 class="font-medium">PC から試す</h3>
+            <div class="flex items-center gap-1">
+              <code class="break-all">{{ issued.curl }}</code>
+              <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" aria-label="コピー" @click="copy(issued.curl)" />
+            </div>
+            <UButton label="閉じる" color="neutral" variant="outline" size="sm" @click="closeIssued" />
+          </div>
+
+          <UFormField label="名前" :error="credLabelError ?? undefined" :description="`どの機械用か分かる名前 (${LABEL_MAX} 文字まで)`">
+            <div class="flex gap-2">
+              <UInput v-model="credLabel" placeholder="例: 本社の複合機" class="w-64" />
+              <UButton label="発行" icon="i-lucide-key-round" :loading="credIssuing" @click="issueCred" />
+            </div>
+          </UFormField>
+
+          <p v-if="creds.length === 0" class="text-sm text-(--ui-text-muted)">発行した資格情報はありません</p>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-(--ui-text-muted)">
+                <th class="py-1">名前</th>
+                <th>ユーザー名</th>
+                <th>発行日</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in creds" :key="c.username" class="border-t border-(--ui-border)" :class="{ 'text-(--ui-text-muted)': c.revoked }">
+                <td class="py-1">{{ c.label }}</td>
+                <td><code>{{ c.username }}</code></td>
+                <td>{{ formatIssuedDate(c.created_at) }}</td>
+                <td class="text-right">
+                  <UBadge v-if="c.revoked" label="失効済み" color="neutral" variant="subtle" />
+                  <UButton v-else label="失効" size="xs" color="error" variant="ghost" @click="revokeCred(c)" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </UCard>
     </template>
   </div>
 </template>

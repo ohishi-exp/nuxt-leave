@@ -33,6 +33,17 @@ secret_name = "INTERNAL_SHARED_SECRET"
 binding = "AUTH_WORKER"
 service = "auth-worker"
 
+# /dav/** の PUT が PDF のチケットを貰う auth-worker の RPC (Refs ohishi-exp/rust-leave-worker#1)。
+[[services]]
+binding = "AUTH_MCRED"
+service = "auth-worker"
+entrypoint = "MachineCredentialEntrypoint"
+
+# /dav/** が受けた PDF の置き場。R2 通知 → Queue → rust-leave-worker が取り込む。
+[[r2_buckets]]
+binding = "LEAVE_INBOX"
+bucket_name = "leave-inbox"
+
 [vars]
 NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth.ippoan.org"
 
@@ -59,6 +70,15 @@ secret_name = "INTERNAL_SHARED_SECRET"
 binding = "AUTH_WORKER"
 service = "auth-worker-staging"
 
+[[env.staging.services]]
+binding = "AUTH_MCRED"
+service = "auth-worker-staging"
+entrypoint = "MachineCredentialEntrypoint"
+
+[[env.staging.r2_buckets]]
+binding = "LEAVE_INBOX"
+bucket_name = "leave-inbox-staging"
+
 [env.staging.vars]
 NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth-staging.ippoan.org"
 
@@ -82,6 +102,15 @@ secret_name = "INTERNAL_SHARED_SECRET"
 [[env.preview.services]]
 binding = "AUTH_WORKER"
 service = "auth-worker-staging"
+
+[[env.preview.services]]
+binding = "AUTH_MCRED"
+service = "auth-worker-staging"
+entrypoint = "MachineCredentialEntrypoint"
+
+[[env.preview.r2_buckets]]
+binding = "LEAVE_INBOX"
+bucket_name = "leave-inbox-staging"
 
 [env.preview.vars]
 NUXT_PUBLIC_AUTH_WORKER_URL = "https://auth-staging.ippoan.org"
