@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { errorMessage, isForbidden, type Employee, type LeavePageDetail, type PageStatus } from '~/utils/leave-api'
-import { searchEmployees, toEmployeeOptions } from '~/utils/employees'
+import { nextUnlinkedIndex } from '~/utils/documents'
 import {
-  canSelectHalf,
-  HALF_OPTIONS,
-  linkFormFromPage,
-  newPeriodRow,
-  normalizePeriodRow,
-  PERIOD_KINDS,
-  toPageUpdateBody,
-  validateLinkForm,
-  type LinkForm,
-} from '~/utils/leave-periods'
-import { formatDateTime, nextUnlinkedId, statusLabel } from '~/utils/pages-list'
+  errorMessage,
+  isForbidden,
+  type Employee,
+  type LeavePage,
+  type LeavePeriod,
+  type PageStatus,
+} from '~/utils/leave-api'
+import { toPageUpdateBody, type LinkForm } from '~/utils/leave-periods'
+import { formatDateTime, statusLabel } from '~/utils/pages-list'
+
+/** 1 PDF の全ページ。保存は 1 行 (1 ページ) ずつ。 */
+interface Row {
+  page: LeavePage
+  periods: LeavePeriod[]
+  saving: boolean
+  error: string
+}
+
+interface RowHandle {
+  focusEmployee: () => void
+  scrollHere: () => void
+}
 
 const api = useLeaveApi()
 const route = useRoute()
@@ -20,35 +30,54 @@ const toast = useToast()
 
 const id = computed(() => String(route.params.id))
 
-const page = ref<LeavePageDetail | null>(null)
+const rows = ref<Row[]>([])
 const pdf = ref<ArrayBuffer | null>(null)
 const employees = ref<Employee[]>([])
-const form = ref<LinkForm>({ employee_cd: '', note: '', periods: [] })
 const loading = ref(false)
-const saving = ref(false)
 const error = ref('')
 const forbidden = ref(false)
 const pdfError = ref('')
 const employeesError = ref('')
-const formErrors = ref<string[]>([])
-const searchTerm = ref('')
+const rowRefs = new Map<string, RowHandle>()
 
-const employeeItems = computed(() =>
-  toEmployeeOptions(searchEmployees(employees.value, searchTerm.value)),
-)
+const { doc, error: openError } = usePdfDoc(pdf)
+
+const head = computed(() => rows.value[0]?.page ?? null)
+const unlinkedCount = computed(() => rows.value.filter(r => r.page.status === 'unlinked').length)
+const finished = computed(() => rows.value.length > 0 && unlinkedCount.value === 0)
+
+function setRowRef(pageId: string, el: unknown) {
+  if (el) rowRefs.set(pageId, el as RowHandle)
+  else rowRefs.delete(pageId)
+}
 
 async function load() {
   loading.value = true
   error.value = ''
   pdfError.value = ''
-  formErrors.value = []
-  page.value = null
+  rows.value = []
   pdf.value = null
   try {
-    const p = await api.getPage(id.value)
-    page.value = p
-    form.value = linkFormFromPage(p)
-    if (form.value.periods.length === 0) form.value.periods.push(newPeriodRow())
+    const first = await api.getPage(id.value)
+    // PDF 全体は 1 回だけ取り、全行の縮小画像で共有する
+    api.getPagePdf(id.value)
+      .then((b) => { pdf.value = b })
+      .catch((e) => { pdfError.value = errorMessage(e) })
+    const list = await api.listPages({ r2_key: first.r2_key, limit: 200 })
+    // 一覧の行には期間が無い。紐づけ済み・対象外の行だけ、期間を取って初期値にする
+    rows.value = await Promise.all(list.map(async (p): Promise<Row> => {
+      let periods: LeavePeriod[] = []
+      if (p.id === first.id) periods = first.periods
+      else if (p.status !== 'unlinked') {
+        try {
+          periods = (await api.getPage(p.id)).periods
+        }
+        catch {
+          periods = []
+        }
+      }
+      return { page: p, periods, saving: false, error: '' }
+    }))
   }
   catch (e) {
     forbidden.value = isForbidden(e)
@@ -58,9 +87,8 @@ async function load() {
   finally {
     loading.value = false
   }
-  api.getPagePdf(id.value)
-    .then((b) => { pdf.value = b })
-    .catch((e) => { pdfError.value = errorMessage(e) })
+  await nextTick()
+  rowRefs.get(id.value)?.scrollHere()
 }
 
 async function loadEmployees() {
@@ -72,49 +100,26 @@ async function loadEmployees() {
   }
 }
 
-function onDateChange(i: number) {
-  const row = form.value.periods[i]
-  if (row) form.value.periods[i] = normalizePeriodRow(row)
-}
-
-function addPeriod() {
-  const last = form.value.periods.at(-1)
-  form.value.periods.push(last ? { ...newPeriodRow(), kind: last.kind } : newPeriodRow())
-}
-
-function removePeriod(i: number) {
-  form.value.periods.splice(i, 1)
-}
-
-async function goNext() {
+async function onSave(index: number, status: PageStatus, form: LinkForm) {
+  const row = rows.value[index]
+  if (!row) return
+  row.saving = true
+  row.error = ''
   try {
-    const list = await api.listPages({ status: 'unlinked', limit: 2, offset: 0 })
-    const next = nextUnlinkedId(list, id.value)
-    await navigateTo(next ? `/pages/${next}` : '/')
-  }
-  catch {
-    await navigateTo('/')
-  }
-}
-
-async function save(status: PageStatus) {
-  // 対象外・未紐づけに戻すときは、空のまま (日付未入力) の期間行を送らない
-  const f: LinkForm = status === 'linked'
-    ? form.value
-    : { ...form.value, periods: form.value.periods.filter(r => r.start_date !== '' || r.end_date !== '') }
-  formErrors.value = validateLinkForm(f, status)
-  if (formErrors.value.length > 0) return
-  saving.value = true
-  try {
-    await api.updatePage(id.value, toPageUpdateBody(f, status))
-    toast.add({ title: `${statusLabel(status)} にしました`, color: 'success' })
-    await goNext()
+    const saved = await api.updatePage(row.page.id, toPageUpdateBody(form, status))
+    row.page = saved
+    row.periods = saved.periods
+    toast.add({ title: `${row.page.page_no} ページ目を${statusLabel(status)}にしました`, color: 'success' })
+    const next = nextUnlinkedIndex(rows.value.map(r => r.page), index)
+    const target = next === null ? undefined : rows.value[next]
+    await nextTick()
+    if (target) rowRefs.get(target.page.id)?.focusEmployee()
   }
   catch (e) {
-    formErrors.value = [errorMessage(e)]
+    row.error = errorMessage(e)
   }
   finally {
-    saving.value = false
+    row.saving = false
   }
 }
 
@@ -136,112 +141,51 @@ onMounted(() => {
     <UAlert v-else-if="error" color="error" :title="error" />
     <div v-else-if="loading" class="text-(--ui-text-muted)">読み込み中…</div>
 
-    <div v-else-if="page" class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <template v-else-if="head">
       <section class="space-y-2">
         <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt class="text-(--ui-text-muted)">受信日時</dt>
-          <dd>{{ formatDateTime(page.received_at) }}</dd>
+          <dd>{{ formatDateTime(head.received_at) }}</dd>
           <dt class="text-(--ui-text-muted)">差出人</dt>
-          <dd>{{ page.mail_from ?? '' }}</dd>
+          <dd>{{ head.mail_from ?? '' }}</dd>
           <dt class="text-(--ui-text-muted)">件名</dt>
-          <dd>{{ page.subject ?? '' }}</dd>
-          <dt class="text-(--ui-text-muted)">状態</dt>
-          <dd><UBadge :label="statusLabel(page.status)" variant="subtle" /></dd>
+          <dd>{{ head.subject ?? '' }}</dd>
+          <dt class="text-(--ui-text-muted)">進み具合</dt>
+          <dd>全 {{ rows.length }} ページ中 未紐づけ {{ unlinkedCount }}</dd>
         </dl>
         <UAlert v-if="pdfError" color="error" :title="pdfError" />
-        <ClientOnly v-else>
-          <PdfPageCanvas :data="pdf" :page-no="page.page_no" />
-        </ClientOnly>
-      </section>
-
-      <section class="space-y-4">
-        <UFormField label="乗務員" required>
-          <USelectMenu
-            v-model="form.employee_cd"
-            v-model:search-term="searchTerm"
-            :items="employeeItems"
-            value-key="value"
-            label-key="label"
-            ignore-filter
-            placeholder="社員C か氏名で検索"
-            class="w-full"
-          />
-          <p v-if="employeesError" class="mt-1 text-sm text-(--ui-error)">{{ employeesError }}</p>
-        </UFormField>
-
-        <div class="space-y-2">
-          <div class="text-sm font-medium">期間</div>
-          <div
-            v-for="(row, i) in form.periods"
-            :key="i"
-            class="space-y-2 rounded border border-(--ui-border) bg-(--ui-bg) p-3"
-          >
-            <div class="flex flex-wrap items-end gap-2">
-              <label class="text-sm">
-                <span class="block text-(--ui-text-muted)">区分</span>
-                <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1">
-                  <option v-for="k in PERIOD_KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
-                </select>
-              </label>
-              <label class="text-sm">
-                <span class="block text-(--ui-text-muted)">開始日</span>
-                <input
-                  v-model="row.start_date"
-                  type="date"
-                  class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1"
-                  @change="onDateChange(i)"
-                >
-              </label>
-              <label class="text-sm">
-                <span class="block text-(--ui-text-muted)">終了日</span>
-                <input
-                  v-model="row.end_date"
-                  type="date"
-                  class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1"
-                  @change="onDateChange(i)"
-                >
-              </label>
-              <label class="text-sm">
-                <span class="block text-(--ui-text-muted)">半日</span>
-                <select
-                  v-model="row.half"
-                  :disabled="!canSelectHalf(row)"
-                  class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1 disabled:opacity-50"
-                >
-                  <option v-for="h in HALF_OPTIONS" :key="h.value" :value="h.value">{{ h.label }}</option>
-                </select>
-              </label>
-              <UButton
-                icon="i-lucide-trash-2"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="この期間を消す"
-                @click="removePeriod(i)"
-              />
-            </div>
-          </div>
-          <UButton icon="i-lucide-plus" label="期間を追加" color="neutral" variant="outline" size="sm" @click="addPeriod" />
-        </div>
-
-        <UFormField label="備考">
-          <UTextarea v-model="form.note" :rows="3" class="w-full" />
-        </UFormField>
-
-        <UAlert v-if="formErrors.length > 0" color="error" title="保存できません">
-          <template #description>
-            <ul class="list-disc pl-5">
-              <li v-for="m in formErrors" :key="m">{{ m }}</li>
-            </ul>
+        <UAlert v-if="openError" color="error" :title="openError" />
+        <UAlert v-if="employeesError" color="error" :title="employeesError" />
+        <UAlert
+          v-if="finished"
+          color="success"
+          icon="i-lucide-circle-check"
+          title="この PDF は完了"
+        >
+          <template #actions>
+            <UButton to="/" label="一覧へ" color="neutral" variant="outline" size="sm" />
           </template>
         </UAlert>
-
-        <div class="flex flex-wrap gap-2">
-          <UButton label="紐づける" icon="i-lucide-link" :loading="saving" @click="save('linked')" />
-          <UButton label="対象外にする" color="neutral" variant="outline" :disabled="saving" @click="save('ignored')" />
-          <UButton label="未紐づけに戻す" color="neutral" variant="ghost" :disabled="saving" @click="save('unlinked')" />
-        </div>
       </section>
-    </div>
+
+      <div class="space-y-3">
+        <PageLinkRow
+          v-for="(r, i) in rows"
+          :key="r.page.id"
+          :ref="(el) => setRowRef(r.page.id, el)"
+          :page="r.page"
+          :periods="r.periods"
+          :doc="doc"
+          :employees="employees"
+          :saving="r.saving"
+          :error="r.error"
+          @save="(status, form) => onSave(i, status, form)"
+        />
+      </div>
+
+      <div v-if="finished" class="flex justify-end">
+        <UButton to="/" label="一覧へ" icon="i-lucide-arrow-left" />
+      </div>
+    </template>
   </div>
 </template>

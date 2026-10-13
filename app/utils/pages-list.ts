@@ -1,7 +1,7 @@
 /**
- * 一覧画面の表示と、紐づけ画面で保存した後に進む「次の未紐づけページ」の決め方。
+ * 一覧画面の表示 (タブ・日時・ページング) の共通部品。
  */
-import type { LeavePage, PageStatus } from './leave-api'
+import type { PageStatus } from './leave-api'
 
 export const STATUS_TABS: { value: PageStatus, label: string }[] = [
   { value: 'unlinked', label: '未紐づけ' },
@@ -13,8 +13,24 @@ export function statusLabel(status: string): string {
   return STATUS_TABS.find(t => t.value === status)?.label ?? status
 }
 
+/** v がタブの値のどれかか (query の値の検査。状態タブも PDF タブも同じ形) */
+export function isTabValue<T extends string>(tabs: { value: T }[], v: unknown): v is T {
+  return tabs.some(t => t.value === v)
+}
+
+/** query の値をタブの値にする (読めなければ fallback) */
+export function tabFromQuery<T extends string>(tabs: { value: T }[], v: unknown, fallback: T): T {
+  return isTabValue(tabs, v) ? v : fallback
+}
+
+/** query の offset を件数にする (正の整数以外は 0) */
+export function offsetFromQuery(v: unknown): number {
+  const n = Number(v)
+  return Number.isInteger(n) && n > 0 ? n : 0
+}
+
 export function isPageStatus(v: unknown): v is PageStatus {
-  return STATUS_TABS.some(t => t.value === v)
+  return isTabValue(STATUS_TABS, v)
 }
 
 /** 受信日時を日本時間で `2026/10/10 14:05` の形にする (読めなければそのまま) */
@@ -36,9 +52,4 @@ export function formatDateTime(iso: string | null): string {
 /** 返ってきた件数が limit と同じなら次のページがあるかもしれない */
 export function hasNextPage(count: number, limit: number): boolean {
   return count >= limit
-}
-
-/** 今のページ以外で最初の未紐づけページの id (無ければ null) */
-export function nextUnlinkedId(pages: LeavePage[], currentId: string): string | null {
-  return pages.find(p => p.id !== currentId && p.status === 'unlinked')?.id ?? null
 }

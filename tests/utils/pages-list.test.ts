@@ -1,21 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { formatDateTime, hasNextPage, isPageStatus, nextUnlinkedId, statusLabel, STATUS_TABS } from '~/utils/pages-list'
-import type { LeavePage } from '~/utils/leave-api'
-
-const page = (id: string, status: LeavePage['status']): LeavePage => ({
-  id,
-  r2_key: `k/${id}`,
-  page_no: 1,
-  mail_from: null,
-  subject: null,
-  received_at: '2026-10-10T05:05:00Z',
-  employee_cd: null,
-  status,
-  linked_by: null,
-  linked_at: null,
-  note: null,
-  created_at: '2026-10-10T05:05:00Z',
-})
+import {
+  formatDateTime,
+  hasNextPage,
+  isPageStatus,
+  isTabValue,
+  offsetFromQuery,
+  statusLabel,
+  STATUS_TABS,
+  tabFromQuery,
+} from '~/utils/pages-list'
 
 describe('状態', () => {
   it('タブは 3 つ', () => {
@@ -43,17 +36,29 @@ describe('formatDateTime', () => {
   })
 })
 
-describe('ページング・次のページ', () => {
+describe('ページング', () => {
   it('件数が limit に届けば次がある', () => {
     expect(hasNextPage(50, 50)).toBe(true)
     expect(hasNextPage(49, 50)).toBe(false)
   })
 
-  it('今のページ以外の最初の未紐づけ', () => {
-    const list = [page('a', 'unlinked'), page('b', 'linked'), page('c', 'unlinked')]
-    expect(nextUnlinkedId(list, 'a')).toBe('c')
-    expect(nextUnlinkedId(list, 'z')).toBe('a')
-    expect(nextUnlinkedId([page('a', 'unlinked')], 'a')).toBeNull()
-    expect(nextUnlinkedId([], 'a')).toBeNull()
+  it('offset の query は正の整数だけ', () => {
+    expect(offsetFromQuery('100')).toBe(100)
+    expect(offsetFromQuery(undefined)).toBe(0)
+    expect(offsetFromQuery('-5')).toBe(0)
+    expect(offsetFromQuery('1.5')).toBe(0)
+    expect(offsetFromQuery('abc')).toBe(0)
+  })
+})
+
+describe('タブの値', () => {
+  const tabs = [{ value: 'a' as const }, { value: 'b' as const }]
+
+  it('isTabValue / tabFromQuery', () => {
+    expect(isTabValue(tabs, 'b')).toBe(true)
+    expect(isTabValue(tabs, 'c')).toBe(false)
+    expect(tabFromQuery(tabs, 'b', 'a')).toBe('b')
+    expect(tabFromQuery(tabs, ['b'], 'a')).toBe('a')
+    expect(tabFromQuery(tabs, undefined, 'a')).toBe('a')
   })
 })

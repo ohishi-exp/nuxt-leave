@@ -6,6 +6,7 @@ import {
   errorStatus,
   FORBIDDEN_MESSAGE,
   isForbidden,
+  listDocumentsQuery,
   listPagesQuery,
   PAGE_LIMIT,
   pagePdfUrl,
@@ -39,6 +40,15 @@ describe('URL の組み立て', () => {
     expect(listPagesQuery({ status: 'unlinked' })).toEqual({ status: 'unlinked', limit: PAGE_LIMIT, offset: 0 })
     expect(listPagesQuery({ status: 'linked', limit: 10, offset: 20 })).toEqual({ status: 'linked', limit: 10, offset: 20 })
   })
+
+  it('一覧の query は r2_key だけでも組める (status は付けない)', () => {
+    expect(listPagesQuery({ r2_key: 'k/a.pdf', limit: 200 })).toEqual({ r2_key: 'k/a.pdf', limit: 200, offset: 0 })
+  })
+
+  it('documents の query は state open・limit 50・offset 0 が既定', () => {
+    expect(listDocumentsQuery({})).toEqual({ state: 'open', limit: PAGE_LIMIT, offset: 0 })
+    expect(listDocumentsQuery({ state: 'all', limit: 10, offset: 20 })).toEqual({ state: 'all', limit: 10, offset: 20 })
+  })
 })
 
 describe('createLeaveApi', () => {
@@ -50,6 +60,18 @@ describe('createLeaveApi', () => {
       url: '/api/proxy/api/leave/pages',
       options: { query: { status: 'ignored', limit: 50, offset: 50 } },
     })
+  })
+
+  it('listDocuments は data を返し query を渡す', async () => {
+    const { fetcher, calls } = fakeFetcher({ data: [{ r2_key: 'k' }] })
+    const r = await createLeaveApi(fetcher).listDocuments({ state: 'done', offset: 50 })
+    expect(r).toEqual([{ r2_key: 'k' }])
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/documents',
+      options: { query: { state: 'done', limit: 50, offset: 50 } },
+    })
+    await createLeaveApi(fetcher).listDocuments()
+    expect(calls[1]!.options).toEqual({ query: { state: 'open', limit: 50, offset: 0 } })
   })
 
   it('getPage / updatePage / getPagePdf', async () => {
