@@ -191,7 +191,7 @@ onMounted(() => {
           <dt class="text-(--ui-text-muted)">進み具合</dt>
           <dd>全 {{ rows.length }} ページ中 未紐づけ {{ unlinkedCount }}</dd>
         </dl>
-        <UFormField label="PDF の基準日" :description="`未設定のときは受信日 (${effectiveBaseDate(head)}) の前後 1 週間から探します`">
+        <UFormField label="PDF の基準日" :description="`未設定のときは受信日 (${effectiveBaseDate({ base_date: null, received_at: head.received_at })}) の前後 1 週間から探します`">
           <div class="flex items-center gap-1">
             <input
               :value="head.base_date ?? ''"
