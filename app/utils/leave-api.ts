@@ -412,9 +412,9 @@ export function createLeaveApi(fetcher: Fetcher) {
       const r = await fetcher<{ data: Department[] }>(`${API_BASE}/leave/departments`)
       return r.data
     },
-    async listAlerts(): Promise<LeaveAlert[]> {
-      const r = await fetcher<{ alerts: LeaveAlert[] }>(`${API_BASE}/leave/alerts`)
-      return r.alerts
+    async listAlerts(): Promise<{ alerts: LeaveAlert[], from?: string, to?: string }> {
+      const r = await fetcher<{ alerts: LeaveAlert[], from?: string, to?: string }>(`${API_BASE}/leave/alerts`)
+      return { alerts: r.alerts, from: r.from, to: r.to }
     },
     getCandidates(id: string, employeeCd: string): Promise<CandidatesResponse> {
       return fetcher<CandidatesResponse>(`${pageUrl(id)}/candidates`, { query: { employee_cd: employeeCd } })

@@ -5,6 +5,7 @@ import { groupAlerts } from '~/utils/leave-alerts'
 const api = useLeaveApi()
 
 const alerts = ref<LeaveAlert[]>([])
+const range = ref('直近〜昨日')
 const employees = ref<Employee[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -16,7 +17,9 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    alerts.value = await api.listAlerts()
+    const r = await api.listAlerts()
+    alerts.value = r.alerts
+    range.value = r.from && r.to ? `${r.from}〜${r.to}` : '直近〜昨日'
     try {
       employees.value = await api.listEmployees()
     }
@@ -45,7 +48,7 @@ onMounted(load)
     <p v-else-if="loading" class="text-sm text-(--ui-text-muted)">読み込み中…</p>
 
     <template v-else>
-      <p class="text-sm">未解消の漏れ: {{ alerts.length }} 件 (直近 62 日〜昨日)</p>
+      <p class="text-sm">未解消の漏れ: {{ alerts.length }} 件 ({{ range }})</p>
       <p v-if="alerts.length === 0" class="text-sm text-(--ui-text-muted)">未解消の漏れはありません</p>
 
       <section
