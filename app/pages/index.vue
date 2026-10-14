@@ -159,12 +159,13 @@ onMounted(load)
               @click="navigateTo(`/pages/${d.first_page_id}`)"
             >
               <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(d.received_at) }}</td>
-              <td class="whitespace-nowrap px-3 py-2" @click.stop>
+              <td class="whitespace-nowrap px-3 py-2">
                 <div class="flex items-center gap-1">
                   <input
                     :value="d.base_date ?? ''"
                     type="date"
                     class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 text-sm"
+                    @click.stop
                     @change="changeBaseDate(d, ($event.target as HTMLInputElement).value)"
                   >
                   <UButton
@@ -174,7 +175,7 @@ onMounted(load)
                     variant="ghost"
                     size="xs"
                     aria-label="基準日を空に戻す"
-                    @click="changeBaseDate(d, '')"
+                    @click.stop="changeBaseDate(d, '')"
                   />
                   <span v-else class="text-xs text-(--ui-text-muted)">受信日 ({{ effectiveBaseDate({ base_date: null, received_at: d.received_at }) }})</span>
                 </div>
