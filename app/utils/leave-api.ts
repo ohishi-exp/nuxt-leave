@@ -322,6 +322,7 @@ export interface LeaveDocument {
   r2_key: string
   first_page_id: string
   received_at: string
+  base_date: string | null
   page_count: number
   unlinked_count: number
   linked_count: number
