@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { DOC_TABS } from '~/utils/documents'
 import { errorMessage, isForbidden, PAGE_LIMIT, type DocState, type LeaveDocument } from '~/utils/leave-api'
-import { formatDateTime, hasNextPage, isTabValue, offsetFromQuery, tabFromQuery } from '~/utils/pages-list'
+import { effectiveBaseDate, formatDateTime, hasNextPage, isTabValue, offsetFromQuery, tabFromQuery } from '~/utils/pages-list'
 import { checkPdfFile } from '~/utils/upload'
 
 const api = useLeaveApi()
@@ -126,16 +126,17 @@ onMounted(load)
           <thead class="bg-(--ui-bg-elevated) text-left">
             <tr>
               <th class="px-3 py-2">受信日時</th>
+              <th class="px-3 py-2">基準日</th>
               <th class="px-3 py-2 text-right">ページ数</th>
               <th class="px-3 py-2 text-right">未紐づけ</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="3" class="px-3 py-6 text-center text-(--ui-text-muted)">読み込み中…</td>
+              <td colspan="4" class="px-3 py-6 text-center text-(--ui-text-muted)">読み込み中…</td>
             </tr>
             <tr v-else-if="docs.length === 0">
-              <td colspan="3" class="px-3 py-6 text-center text-(--ui-text-muted)">ありません</td>
+              <td colspan="4" class="px-3 py-6 text-center text-(--ui-text-muted)">ありません</td>
             </tr>
             <tr
               v-for="d in docs"
@@ -145,6 +146,9 @@ onMounted(load)
               @click="navigateTo(`/pages/${d.first_page_id}`)"
             >
               <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(d.received_at) }}</td>
+              <td class="whitespace-nowrap px-3 py-2">
+                {{ effectiveBaseDate(d) }}<span v-if="d.base_date === null" class="text-(--ui-text-muted)">（受信日）</span>
+              </td>
               <td class="px-3 py-2 text-right">{{ d.page_count }}</td>
               <td class="px-3 py-2 text-right">{{ d.unlinked_count }}</td>
             </tr>

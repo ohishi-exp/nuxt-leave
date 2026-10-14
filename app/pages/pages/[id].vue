@@ -9,7 +9,7 @@ import {
   type PageStatus,
 } from '~/utils/leave-api'
 import { toPageUpdateBody, type LinkForm } from '~/utils/leave-periods'
-import { formatDateTime, statusLabel } from '~/utils/pages-list'
+import { effectiveBaseDate, formatDateTime, statusLabel } from '~/utils/pages-list'
 
 /** 1 PDF の全ページ。保存は 1 行 (1 ページ) ずつ。 */
 interface Row {
@@ -48,10 +48,25 @@ const head = computed(() => rows.value[0]?.page ?? null)
 const unlinkedCount = computed(() => rows.value.filter(r => r.page.status === 'unlinked').length)
 const finished = computed(() => rows.value.length > 0 && unlinkedCount.value === 0)
 
-/** 同じ PDF (r2_key) の行の基準日だけ書き換える (page を差し替えると入力中の期間が消える) */
-function setBaseDate(r2Key: string, baseDate: string | null) {
-  for (const r of rows.value) {
-    if (r.page.r2_key === r2Key) r.page.base_date = baseDate
+const baseDateSaving = ref(false)
+const baseDateError = ref('')
+
+/** PDF の基準日を変える。back は同じ PDF の全ページを書くので、成功したら全行の基準日だけ書き換える (page を差し替えると入力中の期間が消える) */
+async function changeBaseDate(value: string | null) {
+  const first = rows.value[0]
+  const next = value === '' ? null : value
+  if (!first || next === first.page.base_date || baseDateSaving.value) return
+  baseDateSaving.value = true
+  baseDateError.value = ''
+  try {
+    await api.setBaseDate(first.page.id, next)
+    for (const r of rows.value) r.page.base_date = next
+  }
+  catch {
+    baseDateError.value = '基準日を保存できませんでした'
+  }
+  finally {
+    baseDateSaving.value = false
   }
 }
 
@@ -176,6 +191,28 @@ onMounted(() => {
           <dt class="text-(--ui-text-muted)">進み具合</dt>
           <dd>全 {{ rows.length }} ページ中 未紐づけ {{ unlinkedCount }}</dd>
         </dl>
+        <UFormField label="PDF の基準日" :description="`未設定のときは受信日 (${effectiveBaseDate({ base_date: null, received_at: head.received_at })}) の前後 1 週間から探します`">
+          <div class="flex items-center gap-1">
+            <input
+              :value="head.base_date ?? ''"
+              type="date"
+              :disabled="baseDateSaving"
+              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 text-sm"
+              @change="changeBaseDate(($event.target as HTMLInputElement).value)"
+            >
+            <UButton
+              v-if="head.base_date"
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="基準日を空に戻す"
+              :disabled="baseDateSaving"
+              @click="changeBaseDate(null)"
+            />
+          </div>
+          <p v-if="baseDateError" class="mt-1 text-xs text-(--ui-error)">{{ baseDateError }}</p>
+        </UFormField>
         <UAlert v-if="pdfError" color="error" :title="pdfError" />
         <UAlert v-if="openError" color="error" :title="openError" />
         <UAlert v-if="employeesError" color="error" :title="employeesError" />
@@ -205,7 +242,6 @@ onMounted(() => {
           :load-error="r.loadError"
           @save="(status, form) => onSave(i, status, form)"
           @reload="reloadRow(i)"
-          @base-date-changed="d => setBaseDate(r.page.r2_key, d)"
         />
       </div>
 
