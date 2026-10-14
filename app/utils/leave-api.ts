@@ -24,6 +24,8 @@ export interface LeavePage {
   linked_by: string | null
   linked_at: string | null
   note: string | null
+  /** PDF 1 本ごとの基準日 `YYYY-MM-DD` (未設定は null = 受信日が基準) */
+  base_date: string | null
   created_at: string
 }
 
@@ -396,6 +398,12 @@ export function createLeaveApi(fetcher: Fetcher) {
     },
     getCandidates(id: string, employeeCd: string): Promise<CandidatesResponse> {
       return fetcher<CandidatesResponse>(`${pageUrl(id)}/candidates`, { query: { employee_cd: employeeCd } })
+    },
+    setBaseDate(id: string, baseDate: string | null): Promise<{ base_date: string | null, updated: number }> {
+      return fetcher<{ base_date: string | null, updated: number }>(`${pageUrl(id)}/base-date`, {
+        method: 'PUT',
+        body: { base_date: baseDate },
+      })
     },
     getCalendar(employeeCd: string, month: string): Promise<CalendarResponse> {
       return fetcher<CalendarResponse>(`${API_BASE}/leave/calendar`, {

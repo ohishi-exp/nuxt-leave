@@ -49,6 +49,14 @@ export function formatDateTime(iso: string | null): string {
   })
 }
 
+/** 一番星を引く基準の日 `YYYY-MM-DD`: 基準日があればそれ、無ければ受信日の JST の日 (読めなければ空) */
+export function effectiveBaseDate(page: { base_date: string | null, received_at: string }): string {
+  if (page.base_date) return page.base_date
+  const d = new Date(page.received_at)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })
+}
+
 /** 返ってきた件数が limit と同じなら次のページがあるかもしれない */
 export function hasNextPage(count: number, limit: number): boolean {
   return count >= limit

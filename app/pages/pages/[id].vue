@@ -48,6 +48,13 @@ const head = computed(() => rows.value[0]?.page ?? null)
 const unlinkedCount = computed(() => rows.value.filter(r => r.page.status === 'unlinked').length)
 const finished = computed(() => rows.value.length > 0 && unlinkedCount.value === 0)
 
+/** 同じ PDF (r2_key) の行の基準日だけ書き換える (page を差し替えると入力中の期間が消える) */
+function setBaseDate(r2Key: string, baseDate: string | null) {
+  for (const r of rows.value) {
+    if (r.page.r2_key === r2Key) r.page.base_date = baseDate
+  }
+}
+
 function setRowRef(pageId: string, el: unknown) {
   if (el) rowRefs.set(pageId, el as RowHandle)
   else rowRefs.delete(pageId)
@@ -198,6 +205,7 @@ onMounted(() => {
           :load-error="r.loadError"
           @save="(status, form) => onSave(i, status, form)"
           @reload="reloadRow(i)"
+          @base-date-changed="d => setBaseDate(r.page.r2_key, d)"
         />
       </div>
 

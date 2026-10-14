@@ -13,7 +13,7 @@ import {
   validateLinkForm,
   type LinkForm,
 } from '~/utils/leave-periods'
-import { statusLabel } from '~/utils/pages-list'
+import { effectiveBaseDate, statusLabel } from '~/utils/pages-list'
 
 /** 全ページ連続入力の 1 行 (縮小画像 + 紐づけフォーム)。保存は親が行う。 */
 const props = defineProps<{
@@ -31,6 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [status: PageStatus, form: LinkForm]
   reload: []
+  'base-date-changed': [baseDate: string | null]
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -57,16 +58,11 @@ watch(() => [props.page, props.periods], () => {
 
 const api = useLeaveApi()
 const candidateNotice = ref('')
+const baseDateSaving = ref(false)
+const baseDateError = ref('')
 
-// 乗務員を選び直したら一番星の休暇の行で期間を埋める。
-// props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間を上書きしない)
-watch(() => form.value.employee_cd, async (cd, old) => {
-  candidateNotice.value = ''
-  if (cd === syncedCd) {
-    syncedCd = null
-    return
-  }
-  if (cd === '' || cd === old) return
+/** 乗務員が選ばれていて期間が全部空か印付きだけなら、候補を引く (手入力は上書きしない) */
+async function fetchCandidates(cd: string) {
   try {
     const res = await api.getCandidates(props.page.id, cd)
     if (form.value.employee_cd !== cd) return
@@ -77,6 +73,40 @@ watch(() => form.value.employee_cd, async (cd, old) => {
     if (form.value.employee_cd !== cd) return
     candidateNotice.value = '一番星を読めませんでした (手入力してください)'
   }
+}
+
+async function changeBaseDate(value: string | null) {
+  const next = value === '' ? null : value
+  if (next === props.page.base_date || baseDateSaving.value) return
+  baseDateSaving.value = true
+  baseDateError.value = ''
+  try {
+    await api.setBaseDate(props.page.id, next)
+    emit('base-date-changed', next)
+    const cd = form.value.employee_cd
+    const onlyAuto = form.value.periods.every(r =>
+      (r.ichiban_row_ids ?? []).length > 0 || (r.start_date === '' && r.end_date === ''))
+    candidateNotice.value = ''
+    if (cd !== '' && onlyAuto) await fetchCandidates(cd)
+  }
+  catch {
+    baseDateError.value = '基準日を保存できませんでした'
+  }
+  finally {
+    baseDateSaving.value = false
+  }
+}
+
+// 乗務員を選び直したら一番星の休暇の行で期間を埋める。
+// props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間を上書きしない)
+watch(() => form.value.employee_cd, async (cd, old) => {
+  candidateNotice.value = ''
+  if (cd === syncedCd) {
+    syncedCd = null
+    return
+  }
+  if (cd === '' || cd === old) return
+  await fetchCandidates(cd)
 })
 
 function onDateChange(i: number) {
@@ -155,6 +185,29 @@ defineExpose({ focusEmployee, scrollHere })
     </div>
 
     <div class="space-y-3">
+      <UFormField label="PDF の基準日" :description="`未設定のときは受信日 (${effectiveBaseDate(page)}) の前後 1 週間から探します`">
+        <div class="flex items-center gap-1">
+          <input
+            :value="page.base_date ?? ''"
+            type="date"
+            :disabled="baseDateSaving"
+            class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 text-sm"
+            @change="changeBaseDate(($event.target as HTMLInputElement).value)"
+          >
+          <UButton
+            v-if="page.base_date"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            aria-label="基準日を空に戻す"
+            :disabled="baseDateSaving"
+            @click="changeBaseDate(null)"
+          />
+        </div>
+        <p v-if="baseDateError" class="mt-1 text-xs text-(--ui-error)">{{ baseDateError }}</p>
+      </UFormField>
+
       <UFormField label="乗務員" required>
         <div data-employee>
           <EmployeeSelect v-model="form.employee_cd" :employees="employees" />
