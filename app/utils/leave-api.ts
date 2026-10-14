@@ -266,6 +266,25 @@ export interface OpeningPutResponse {
   deleted: number
 }
 
+/** 年度一覧の 1 人 (`GET /api/leave/ledger`)。日数は 0.5 刻み */
+export interface LedgerRow {
+  employee_cd: string
+  employee_name: string | null
+  hire_date: string | null
+  latest_grant: { grant_date: string, days: number } | null
+  granted_in_fy: number
+  used_in_fy: number
+  remaining: number
+  expired: number
+  unallocated: number
+}
+
+export interface LedgerResponse {
+  as_of: string
+  fiscal_year: { start: string, end: string, label: string }
+  data: LedgerRow[]
+}
+
 export interface GrantCreateBody {
   employee_cd: string
   grant_date: string
@@ -410,6 +429,9 @@ export function createLeaveApi(fetcher: Fetcher) {
       return fetcher<CalendarResponse>(`${API_BASE}/leave/calendar`, {
         query: { employee_cd: employeeCd, month },
       })
+    },
+    getLedger(asOf?: string): Promise<LedgerResponse> {
+      return fetcher<LedgerResponse>(`${API_BASE}/leave/ledger`, { query: asOf ? { as_of: asOf } : {} })
     },
     listGrants(employeeCd: string): Promise<GrantsResponse> {
       return fetcher<GrantsResponse>(`${API_BASE}/leave/grants`, { query: { employee_cd: employeeCd } })
