@@ -9,6 +9,7 @@ import {
   rowButtons,
   rowKeyAction,
   selectedPeriods,
+  unmatchedSaved,
   validateLinkForm,
   type LinkForm,
 } from '~/utils/leave-periods'
@@ -62,24 +63,33 @@ watch(() => [props.page, props.periods], () => {
   // 作り直しで employee_cd が変わる分は、乗務員を選んだ操作ではないので候補を引かない
   if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
   form.value = next
-  checked.value = []
-  initial.value = { ...next, checked: [] }
+  // 取得済みの候補があれば、保存済みと同じ候補をチェックし直す (開いた直後を dirty にしない)。
+  // 期間が空 (対象外・未紐づけに戻した直後) はチェックを全部外す
+  checked.value = props.periods.length > 0 ? initialCheckedKeys(candidates.value, props.periods) : []
+  initial.value = { ...next, checked: [...checked.value] }
 })
 
+/** 候補で表せない保存済みの期間だけ「保存済み」に出す */
+const savedOnly = computed(() => unmatchedSaved(candidates.value, props.periods))
+
 /** 乗務員を選んだら一番星の候補を引く。1 つだけなら最初からチェックし、2 つ以上は選んでもらう */
-async function fetchCandidates(cd: string) {
+async function fetchCandidates(cd: string, focus = true) {
   try {
     const res = await api.getCandidates(props.page.id, cd)
     if (form.value.employee_cd !== cd) return
     candidates.value = res.periods
     checked.value = initialCheckedKeys(res.periods, props.periods)
+    // 開いたときの乗務員のままなら、この初期チェックを「変えていない」基準にする
+    if (cd === initial.value.employee_cd) initial.value = { ...initial.value, checked: [...checked.value] }
     if (res.periods.length === 0) {
       candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
       return
     }
-    // 候補が返ったら、キーボードだけで続けられるよう候補一覧へフォーカスを移す
+    // 乗務員を確定して候補が返ったら、キーボードだけで続けられるよう候補一覧へフォーカスを移す
+    // (基準日が変わった引き直しでは動かさない)
+    if (!focus) return
     await nextTick()
-    candidateBoxes()[0]?.focus()
+    focusCandidates()
   }
   catch {
     if (form.value.employee_cd !== cd) return
@@ -89,6 +99,11 @@ async function fetchCandidates(cd: string) {
 
 // 乗務員を選び直したら一番星の候補を取り直す。
 // props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間はそのまま)
+// 保存済みの行は開いたとき候補を引き、保存済みと同じ候補にチェックを付ける
+onMounted(() => {
+  if (props.page.status !== 'unlinked' && form.value.employee_cd !== '') fetchCandidates(form.value.employee_cd, false)
+})
+
 watch(() => form.value.employee_cd, async (cd, old) => {
   candidateNotice.value = ''
   candidates.value = []
@@ -99,6 +114,13 @@ watch(() => form.value.employee_cd, async (cd, old) => {
   }
   if (cd === '' || cd === old) return
   await fetchCandidates(cd)
+})
+
+// 基準日が変わったら候補を引き直す (チェックは初期規則でやり直し、保存済みの期間はそのまま)
+watch(() => props.page.base_date, async () => {
+  const cd = form.value.employee_cd
+  if (cd === '') return
+  await fetchCandidates(cd, false)
 })
 
 function submit(status: PageStatus) {
@@ -114,6 +136,13 @@ function submit(status: PageStatus) {
 
 function candidateBoxes(): HTMLInputElement[] {
   return Array.from(root.value?.querySelectorAll<HTMLInputElement>('[data-candidates] input[type=checkbox]') ?? [])
+}
+
+/** 候補一覧の、今チェックの付いている最初の行 (無ければ先頭) にフォーカスする */
+function focusCandidates() {
+  const boxes = candidateBoxes()
+  const target = boxes.find(b => b.checked) ?? boxes[0]
+  target?.focus()
 }
 
 /** キー操作 (判定は rowKeyAction)。備考など他の入力欄の中では何もしない */
@@ -137,6 +166,7 @@ function onKeydown(ev: KeyboardEvent) {
   else if (act.type === 'ignore') {
     if (buttons.value.includes('ignore')) submit('ignored')
   }
+  else if (act.type === 'focusCandidates') focusCandidates()
   else if (act.type === 'toggle') boxes[act.index]?.click()
   else if (act.type === 'toggle-focused') (el as HTMLInputElement).click()
   else {
@@ -161,7 +191,7 @@ defineExpose({ focusEmployee, scrollHere })
 <template>
   <div
     ref="root"
-    class="scroll-mt-4 grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
+    class="scroll-mt-16 grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
     :class="page.status === 'unlinked' ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
   >
     <div class="space-y-1">
@@ -199,17 +229,17 @@ defineExpose({ focusEmployee, scrollHere })
 
       <div class="space-y-2 rounded border border-(--ui-border) p-2">
         <div class="text-sm font-medium">一番星の候補</div>
-        <div v-if="periods.length > 0" class="text-sm">
+        <div v-if="savedOnly.length > 0" class="text-sm">
           <div class="text-xs text-(--ui-text-muted)">保存済み</div>
-          <div v-for="(p, i) in periods" :key="i">{{ periodLabel(p) }}</div>
+          <div v-for="(p, i) in savedOnly" :key="i">{{ periodLabel(p) }}</div>
         </div>
         <div v-if="candidates.length > 0" data-candidates class="space-y-1">
           <label v-for="(p, n) in candidates" :key="candidateKey(p)" class="flex items-center gap-2 text-sm">
             <input v-model="checked" type="checkbox" :value="candidateKey(p)">
             <span><span v-if="n < 9" class="text-(--ui-text-muted)">{{ n + 1 }}.</span> {{ periodLabel(p) }}</span>
           </label>
-          <p v-if="page.status === 'unlinked'" class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づける / Ctrl+Enter 対象外</p>
-          <p v-else class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づけ直す (変えたときだけ)</p>
+          <p v-if="page.status === 'unlinked'" class="text-xs text-(--ui-text-muted)">乗務員 Enter で候補へ / ↑↓ 移動 / Space・数字 選択 / Enter 紐づける / Ctrl+Enter 対象外</p>
+          <p v-else class="text-xs text-(--ui-text-muted)">乗務員 Enter で候補へ / ↑↓ 移動 / Space・数字 選択 / Enter 紐づけ直す (変えたときだけ)</p>
         </div>
         <UButton
           v-if="form.employee_cd !== '' && candidates.length === 0 && !candidateNotice"
