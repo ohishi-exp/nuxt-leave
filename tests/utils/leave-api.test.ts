@@ -160,6 +160,27 @@ describe('エラーの文', () => {
     expect(errorMessage({ status: 400, data: { error: 'something_new' } })).toBe('something_new')
   })
 
+  it('uploadPdf は PDF そのものを POST する', async () => {
+    const { fetcher, calls } = fakeFetcher({ pages: 3 })
+    const file = new Blob(['%PDF-'], { type: 'application/pdf' })
+    expect(await createLeaveApi(fetcher).uploadPdf(file)).toEqual({ pages: 3 })
+    expect(calls).toEqual([{
+      url: '/api/proxy/api/leave/uploads',
+      options: { method: 'POST', body: file, headers: { 'Content-Type': 'application/pdf' } },
+    }])
+  })
+
+  it('取り込みのエラー語と 413', () => {
+    const msg = (c: string) => errorMessage({ status: 400, data: { error: c } })
+    expect(msg('not_pdf')).toBe('PDF ではありません')
+    expect(msg('pdf_too_large')).toBe('10MB を超えています')
+    expect(msg('unreadable_pdf')).toBe('PDF を読めませんでした')
+    expect(msg('too_many_pages')).toBe('ページが多すぎます (50 ページまで)')
+    expect(msg('ingest_failed')).toBe('取り込みに失敗しました。少し待ってからやり直してください')
+    expect(errorMessage({ status: 413, data: 'Payload Too Large' })).toBe('10MB を超えています')
+    expect(errorMessage({ statusCode: 413 })).toBe('10MB を超えています')
+  })
+
   it('期首残のエラー語', () => {
     const msg = (c: string) => errorMessage({ status: 400, data: { error: c } })
     expect(msg('invalid_as_of')).toBe('期首日が正しくありません')

@@ -2,8 +2,10 @@
 import { DOC_TABS } from '~/utils/documents'
 import { errorMessage, isForbidden, PAGE_LIMIT, type DocState, type LeaveDocument } from '~/utils/leave-api'
 import { formatDateTime, hasNextPage, isTabValue, offsetFromQuery, tabFromQuery } from '~/utils/pages-list'
+import { checkPdfFile } from '~/utils/upload'
 
 const api = useLeaveApi()
+const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
@@ -44,6 +46,48 @@ function onTab(v: string | number) {
   }
 }
 
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+/** 選んだ PDF を 1 つずつ順に取り込む (同じファイルでも毎回取り込む) */
+async function onFiles(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  if (files.length === 0 || uploading.value) return
+  uploading.value = true
+  let ok = 0
+  let pages = 0
+  const failures: string[] = []
+  try {
+    for (const f of files) {
+      const bad = checkPdfFile(f)
+      if (bad) {
+        failures.push(`${f.name}: ${bad}`)
+        continue
+      }
+      try {
+        const r = await api.uploadPdf(f)
+        ok += 1
+        pages += r.pages
+      }
+      catch (e) {
+        failures.push(`${f.name}: ${errorMessage(e)}`)
+      }
+    }
+  }
+  finally {
+    uploading.value = false
+  }
+  toast.add({
+    title: ok > 0 ? `${ok} 件取り込みました (計 ${pages} ページ)` : '取り込めませんでした',
+    description: failures.length > 0 ? failures.join('\n') : undefined,
+    color: ok === 0 ? 'error' : failures.length > 0 ? 'warning' : 'success',
+    duration: failures.length > 0 ? 0 : undefined,
+  })
+  await load()
+}
+
 const canNext = computed(() => hasNextPage(docs.value.length, PAGE_LIMIT))
 
 onMounted(load)
@@ -51,7 +95,24 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-xl font-bold">申請書 (PDF)</h1>
+    <div class="flex items-center justify-between gap-2">
+      <h1 class="text-xl font-bold">申請書 (PDF)</h1>
+      <UButton
+        label="PDF を取り込む"
+        icon="i-lucide-upload"
+        :loading="uploading"
+        :disabled="uploading"
+        @click="fileInput?.click()"
+      />
+      <input
+        ref="fileInput"
+        type="file"
+        accept="application/pdf,.pdf"
+        multiple
+        class="hidden"
+        @change="onFiles"
+      >
+    </div>
 
     <UAlert v-if="forbidden" color="error" icon="i-lucide-shield-alert" :title="error" />
 

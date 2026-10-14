@@ -9,7 +9,7 @@ function useAuthedFetcher(): Fetcher {
   const { token, clearAuth } = useAuth()
 
   return async <T>(url: string, options: Parameters<Fetcher>[1] = {}) => {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { ...options.headers }
     if (token.value) headers.Authorization = `Bearer ${token.value}`
     try {
       return await $fetch<T>(url, {
