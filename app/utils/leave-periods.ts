@@ -1,7 +1,7 @@
 /**
  * 紐づけ画面のフォーム (乗務員・期間・備考) の検証と、PUT body への変換。
- * 規則は back (rust-leave-worker の pages.rs) と同じ: 逆順不可・半日は単日だけ・
- * linked は乗務員と期間 1 行以上が必須。
+ * 期間は手で入れず、一番星の候補からチェックして選ぶ。
+ * 規則は back (rust-leave-worker の pages.rs) と同じ: linked は乗務員と期間 1 行以上が必須。
  */
 import type { Half, IchibanCandidatePeriod, LeavePeriod, PageStatus, PageUpdateBody, PeriodKind } from './leave-api'
 
@@ -12,56 +12,52 @@ export const PERIOD_KINDS: { value: PeriodKind, label: string }[] = [
   { value: 'kekkin', label: '欠勤' },
 ]
 
-export const HALF_OPTIONS: { value: '' | Half, label: string }[] = [
-  { value: '', label: 'なし' },
-  { value: 'am', label: '午前' },
-  { value: 'pm', label: '午後' },
-]
-
 export function kindLabel(kind: string): string {
   return PERIOD_KINDS.find(k => k.value === kind)?.label ?? kind
 }
 
-/** フォームの期間 1 行 (日付は `YYYY-MM-DD`、未入力は空文字) */
-export interface PeriodRow {
-  kind: PeriodKind
-  start_date: string
-  end_date: string
-  half: '' | Half
-  /** 非空 = 一番星の行から埋めた期間 (保存時に back へ送る) */
-  ichiban_row_ids?: string[]
-}
-
+/** 保存する中身 (期間は候補のチェックから作る) */
 export interface LinkForm {
   employee_cd: string
   note: string
-  periods: PeriodRow[]
+  periods: LeavePeriod[]
+  /** 期間にした一番星の行 ID (保存済みの期間をそのまま送るときは空) */
+  ichiban_row_ids: string[]
 }
 
-export function newPeriodRow(): PeriodRow {
-  return { kind: 'yukyu', start_date: '', end_date: '', half: '' }
+/** 候補を見分ける印 (候補に含まれる一番星の row_id を並べた文字列) */
+export function candidateKey(p: IchibanCandidatePeriod): string {
+  return p.rows.map(r => r.row_id).join(',')
 }
 
-/** 半日を選べるのは開始日 = 終了日 (どちらも入力済み) のときだけ */
-export function canSelectHalf(row: PeriodRow): boolean {
-  return row.start_date !== '' && row.start_date === row.end_date
+/** 期間 1 つの表示: `区分 開始日〜終了日 (午前/午後)`。単日は日付 1 つ */
+export function periodLabel(p: { kind: string, start_date: string, end_date: string, half: Half | null }): string {
+  const days = p.start_date === p.end_date ? p.start_date : `${p.start_date}〜${p.end_date}`
+  const half = p.half === 'am' ? ' (午前)' : p.half === 'pm' ? ' (午後)' : ''
+  return `${kindLabel(p.kind)} ${days}${half}`
 }
 
-/** 開始日だけ入れたら終了日にも同じ日を入れ、単日でなくなったら半日を外す */
-export function normalizePeriodRow(row: PeriodRow): PeriodRow {
-  const end_date = row.end_date === '' ? row.start_date : row.end_date
-  const next = { ...row, end_date }
-  return canSelectHalf(next) ? next : { ...next, half: '' }
+/** 候補が 1 つだけで、保存済みの期間も無いときだけ最初からチェックする */
+export function initialCheckedKeys(candidates: IchibanCandidatePeriod[], saved: LeavePeriod[]): string[] {
+  const only = candidates.length === 1 && saved.length === 0 ? candidates[0] : undefined
+  return only ? [candidateKey(only)] : []
 }
 
-/** 期間 1 行の問題を文にする (問題なければ null)。`YYYY-MM-DD` は文字列比較で前後が決まる */
-export function periodRowError(row: PeriodRow): string | null {
-  if (row.start_date === '' || row.end_date === '') return '開始日と終了日を入れてください'
-  if (row.end_date < row.start_date) return '終了日が開始日より前です'
-  if (row.half !== '' && row.start_date !== row.end_date) {
-    return '半日は開始日と終了日が同じ日のときだけ選べます'
+/**
+ * チェックした候補 → 保存する期間と一番星の行 ID。
+ * 1 つもチェックが無ければ保存済みの期間をそのまま (行 ID は送らない)。
+ */
+export function selectedPeriods(
+  checked: string[],
+  candidates: IchibanCandidatePeriod[],
+  saved: LeavePeriod[],
+): { periods: LeavePeriod[], ichiban_row_ids: string[] } {
+  const picked = candidates.filter(p => checked.includes(candidateKey(p)))
+  if (picked.length === 0) return { periods: saved, ichiban_row_ids: [] }
+  return {
+    periods: picked.map(p => ({ kind: p.kind, start_date: p.start_date, end_date: p.end_date, half: p.half })),
+    ichiban_row_ids: [...new Set(picked.flatMap(p => p.rows.map(r => r.row_id)))],
   }
-  return null
 }
 
 /** 保存する前のフォームの問題 (空なら保存してよい) */
@@ -69,22 +65,9 @@ export function validateLinkForm(form: LinkForm, status: PageStatus): string[] {
   const errors: string[] = []
   if (status === 'linked') {
     if (form.employee_cd.trim() === '') errors.push('乗務員を選んでください')
-    if (form.periods.length === 0) errors.push('期間を 1 行以上入れてください')
+    if (form.periods.length === 0) errors.push('一番星の候補を 1 つ以上選んでください。無ければ一番星に記録を足してください')
   }
-  form.periods.forEach((row, i) => {
-    const err = periodRowError(row)
-    if (err) errors.push(`期間 ${i + 1} 行目: ${err}`)
-  })
   return errors
-}
-
-export function toPeriodBody(row: PeriodRow): LeavePeriod {
-  return {
-    kind: row.kind,
-    start_date: row.start_date,
-    end_date: row.end_date,
-    half: row.half === '' ? null : row.half,
-  }
 }
 
 export function toPageUpdateBody(form: LinkForm, status: PageStatus): PageUpdateBody {
@@ -94,58 +77,39 @@ export function toPageUpdateBody(form: LinkForm, status: PageStatus): PageUpdate
     employee_cd: cd === '' ? null : cd,
     status,
     note: note === '' ? null : note,
-    periods: form.periods.map(toPeriodBody),
+    periods: form.periods,
   }
-  if (status === 'linked') {
-    const ids = [...new Set(form.periods.flatMap(r => r.ichiban_row_ids ?? []))]
-    if (ids.length > 0) body.ichiban_row_ids = ids
-  }
+  if (status === 'linked' && form.ichiban_row_ids.length > 0) body.ichiban_row_ids = form.ichiban_row_ids
   return body
 }
 
-/** 一番星の期間の候補 → フォームの行 (印付き) */
-export function candidateToPeriodRow(p: IchibanCandidatePeriod): PeriodRow {
-  return {
-    kind: p.kind,
-    start_date: p.start_date,
-    end_date: p.end_date,
-    half: p.half ?? '',
-    ichiban_row_ids: p.rows.map(r => r.row_id),
-  }
+/** キーボード操作の結果 (キーを押した場所と状態から決める) */
+export type RowKeyAction =
+  | { type: 'move', delta: -1 | 1 }
+  | { type: 'toggle-focused' }
+  | { type: 'toggle', index: number }
+  | { type: 'link' }
+  | { type: 'ignore' }
+
+export interface RowKeyInput {
+  key: string
+  ctrlKey: boolean
+  metaKey: boolean
+  /** キーを押した場所。備考など他の入力欄は 'other' (ショートカットを効かせない) */
+  zone: 'candidates' | 'employee' | 'other'
+  /** 乗務員の選択メニューが開いている (Enter は選択に使われる) */
+  menuOpen: boolean
+  candidateCount: number
 }
 
-/**
- * 乗務員を選んだとき候補を期間に反映する。前の乗務員の候補 (印付き) は外し、
- * 残りが無いか全部空なら候補で埋める。手入力の行があれば上書きしない。
- */
-export function applyCandidates(rows: PeriodRow[], periods: IchibanCandidatePeriod[]): PeriodRow[] {
-  const rest = rows.filter(r => (r.ichiban_row_ids ?? []).length === 0)
-  if (rest.every(r => r.start_date === '' && r.end_date === '')) {
-    return periods.length > 0 ? periods.map(candidateToPeriodRow) : [newPeriodRow()]
-  }
-  return rest
-}
-
-/** 手で区分・日付・半日を変えた行は一番星の行から外す */
-export function clearIchibanMark(row: PeriodRow): PeriodRow {
-  const { ichiban_row_ids: _ids, ...rest } = row
-  return rest
-}
-
-/** 取得したページ (と期間) をフォームの初期値にする */
-export function linkFormFromPage(page: {
-  employee_cd: string | null
-  note: string | null
-  periods: LeavePeriod[]
-}): LinkForm {
-  return {
-    employee_cd: page.employee_cd ?? '',
-    note: page.note ?? '',
-    periods: page.periods.map(p => ({
-      kind: p.kind,
-      start_date: p.start_date,
-      end_date: p.end_date,
-      half: p.half ?? '',
-    })),
-  }
+/** 1 行の中のキー操作: ↑↓ 移動 / Space・1〜9 選択 / Enter 紐づける / Ctrl(⌘)+Enter 対象外 */
+export function rowKeyAction(i: RowKeyInput): RowKeyAction | null {
+  if (i.zone === 'other' || i.menuOpen) return null
+  if (i.key === 'Enter') return i.ctrlKey || i.metaKey ? { type: 'ignore' } : { type: 'link' }
+  if (i.zone !== 'candidates') return null
+  if (i.key === 'ArrowUp') return { type: 'move', delta: -1 }
+  if (i.key === 'ArrowDown') return { type: 'move', delta: 1 }
+  if (i.key === ' ') return { type: 'toggle-focused' }
+  const n = /^[1-9]$/.test(i.key) ? Number(i.key) : 0
+  return n >= 1 && n <= i.candidateCount ? { type: 'toggle', index: n - 1 } : null
 }

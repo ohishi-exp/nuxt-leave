@@ -46,6 +46,19 @@ function onTab(v: string | number) {
   }
 }
 
+/** 基準日を変える (back は同じ PDF の全ページを書く)。成功したらその行の値だけ書き換える */
+async function changeBaseDate(d: LeaveDocument, value: string) {
+  const next = value === '' ? null : value
+  if (next === d.base_date) return
+  try {
+    await api.setBaseDate(d.first_page_id, next)
+    d.base_date = next
+  }
+  catch {
+    error.value = '基準日を保存できませんでした'
+  }
+}
+
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
@@ -146,8 +159,25 @@ onMounted(load)
               @click="navigateTo(`/pages/${d.first_page_id}`)"
             >
               <td class="whitespace-nowrap px-3 py-2">{{ formatDateTime(d.received_at) }}</td>
-              <td class="whitespace-nowrap px-3 py-2">
-                {{ effectiveBaseDate(d) }}<span v-if="d.base_date === null" class="text-(--ui-text-muted)">（受信日）</span>
+              <td class="whitespace-nowrap px-3 py-2" @click.stop>
+                <div class="flex items-center gap-1">
+                  <input
+                    :value="d.base_date ?? ''"
+                    type="date"
+                    class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 text-sm"
+                    @change="changeBaseDate(d, ($event.target as HTMLInputElement).value)"
+                  >
+                  <UButton
+                    v-if="d.base_date"
+                    icon="i-lucide-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="基準日を空に戻す"
+                    @click="changeBaseDate(d, '')"
+                  />
+                  <span v-else class="text-xs text-(--ui-text-muted)">受信日 ({{ effectiveBaseDate({ base_date: null, received_at: d.received_at }) }})</span>
+                </div>
               </td>
               <td class="px-3 py-2 text-right">{{ d.page_count }}</td>
               <td class="px-3 py-2 text-right">{{ d.unlinked_count }}</td>
