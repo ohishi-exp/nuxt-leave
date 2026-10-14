@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import type { Employee, LeavePage, LeavePeriod, PageStatus } from '~/utils/leave-api'
+import type { Employee, IchibanCandidatePeriod, LeavePage, LeavePeriod, PageStatus } from '~/utils/leave-api'
 import {
-  applyCandidates,
-  canSelectHalf,
-  clearIchibanMark,
-  HALF_OPTIONS,
-  linkFormFromPage,
-  newPeriodRow,
-  normalizePeriodRow,
-  PERIOD_KINDS,
+  candidateKey,
+  initialCheckedKeys,
+  periodLabel,
+  rowKeyAction,
+  selectedPeriods,
   validateLinkForm,
   type LinkForm,
 } from '~/utils/leave-periods'
@@ -37,15 +34,19 @@ const root = ref<HTMLElement | null>(null)
 const zoomOpen = ref(false)
 const formErrors = ref<string[]>([])
 
-function initialForm(): LinkForm {
-  const f = linkFormFromPage({ employee_cd: props.page.employee_cd, note: props.page.note, periods: props.periods })
-  if (f.periods.length === 0) f.periods.push(newPeriodRow())
-  return f
+function initialForm() {
+  return { employee_cd: props.page.employee_cd ?? '', note: props.page.note ?? '' }
 }
 
-const form = ref<LinkForm>(initialForm())
+const form = ref(initialForm())
 /** props 由来の作り直しで入った employee_cd (次の watch 1 回だけ候補を引かない) */
 let syncedCd: string | null = null
+
+const api = useLeaveApi()
+const candidateNotice = ref('')
+/** 一番星の候補 (乗務員の欄の下に並べ、チェックしたものが期間になる) */
+const candidates = ref<IchibanCandidatePeriod[]>([])
+const checked = ref<string[]>([])
 
 // 保存・再取得で page / periods が差し替わったら、フォームも保存された値に合わせる
 watch(() => [props.page, props.periods], () => {
@@ -53,38 +54,36 @@ watch(() => [props.page, props.periods], () => {
   // 作り直しで employee_cd が変わる分は、乗務員を選んだ操作ではないので候補を引かない
   if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
   form.value = next
+  checked.value = []
 })
 
-const api = useLeaveApi()
-const candidateNotice = ref('')
-
-/** 乗務員が選ばれていて期間が全部空か印付きだけなら、候補を引く (手入力は上書きしない) */
+/** 乗務員を選んだら一番星の候補を引く。1 つだけなら最初からチェックし、2 つ以上は選んでもらう */
 async function fetchCandidates(cd: string) {
   try {
     const res = await api.getCandidates(props.page.id, cd)
     if (form.value.employee_cd !== cd) return
-    form.value.periods = applyCandidates(form.value.periods, res.periods)
-    if (res.periods.length === 0) candidateNotice.value = '一番星に記録がありません (手入力してください)'
+    candidates.value = res.periods
+    checked.value = initialCheckedKeys(res.periods, props.periods)
+    if (res.periods.length === 0) {
+      candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
+      return
+    }
+    // 候補が返ったら、キーボードだけで続けられるよう候補一覧へフォーカスを移す
+    await nextTick()
+    candidateBoxes()[0]?.focus()
   }
   catch {
     if (form.value.employee_cd !== cd) return
-    candidateNotice.value = '一番星を読めませんでした (手入力してください)'
+    candidateNotice.value = '一番星を読めませんでした'
   }
 }
 
-// PDF の基準日が (親で) 変わったら、乗務員が選ばれていて期間が全部空か印付きだけなら候補を引き直す
-watch(() => props.page.base_date, async () => {
-  const cd = form.value.employee_cd
-  const onlyAuto = form.value.periods.every(r =>
-    (r.ichiban_row_ids ?? []).length > 0 || (r.start_date === '' && r.end_date === ''))
-  candidateNotice.value = ''
-  if (cd !== '' && onlyAuto) await fetchCandidates(cd)
-})
-
-// 乗務員を選び直したら一番星の休暇の行で期間を埋める。
-// props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間を上書きしない)
+// 乗務員を選び直したら一番星の候補を取り直す。
+// props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間はそのまま)
 watch(() => form.value.employee_cd, async (cd, old) => {
   candidateNotice.value = ''
+  candidates.value = []
+  checked.value = []
   if (cd === syncedCd) {
     syncedCd = null
     return
@@ -93,34 +92,44 @@ watch(() => form.value.employee_cd, async (cd, old) => {
   await fetchCandidates(cd)
 })
 
-function onDateChange(i: number) {
-  const row = form.value.periods[i]
-  if (row) form.value.periods[i] = normalizePeriodRow(clearIchibanMark(row))
-}
-
-function onRowChange(i: number) {
-  const row = form.value.periods[i]
-  if (row) form.value.periods[i] = clearIchibanMark(row)
-}
-
-function addPeriod() {
-  const last = form.value.periods.at(-1)
-  form.value.periods.push(last ? { ...newPeriodRow(), kind: last.kind } : newPeriodRow())
-}
-
-function removePeriod(i: number) {
-  form.value.periods.splice(i, 1)
-}
-
 function submit(status: PageStatus) {
-  if (props.loadError) return
-  // 対象外・未紐づけに戻すときは、空のまま (日付未入力) の期間行を送らない
-  const f: LinkForm = status === 'linked'
-    ? form.value
-    : { ...form.value, periods: form.value.periods.filter(r => r.start_date !== '' || r.end_date !== '') }
+  if (props.loadError || props.saving) return
+  const f: LinkForm = {
+    ...form.value,
+    ...selectedPeriods(checked.value, candidates.value, props.periods),
+  }
   formErrors.value = validateLinkForm(f, status)
   if (formErrors.value.length > 0) return
   emit('save', status, f)
+}
+
+function candidateBoxes(): HTMLInputElement[] {
+  return Array.from(root.value?.querySelectorAll<HTMLInputElement>('[data-candidates] input[type=checkbox]') ?? [])
+}
+
+/** キー操作 (判定は rowKeyAction)。備考など他の入力欄の中では何もしない */
+function onKeydown(ev: KeyboardEvent) {
+  const el = ev.target as HTMLElement
+  const zone = el.closest('[data-candidates]') ? 'candidates' : el.closest('[data-employee]') ? 'employee' : 'other'
+  const boxes = candidateBoxes()
+  const act = rowKeyAction({
+    key: ev.key,
+    ctrlKey: ev.ctrlKey,
+    metaKey: ev.metaKey,
+    zone,
+    menuOpen: el.getAttribute('aria-expanded') === 'true',
+    candidateCount: boxes.length,
+  })
+  if (!act || ev.isComposing) return
+  ev.preventDefault()
+  if (act.type === 'link') submit('linked')
+  else if (act.type === 'ignore') submit('ignored')
+  else if (act.type === 'toggle') boxes[act.index]?.click()
+  else if (act.type === 'toggle-focused') (el as HTMLInputElement).click()
+  else {
+    const at = Math.max(0, boxes.indexOf(el as HTMLInputElement) + act.delta)
+    boxes[Math.min(at, boxes.length - 1)]?.focus()
+  }
 }
 
 /** 次の行へ進んだとき: 行の上端を画面の上に合わせて乗務員欄にフォーカスする */
@@ -168,66 +177,36 @@ defineExpose({ focusEmployee, scrollHere })
       </UModal>
     </div>
 
-    <div class="space-y-3">
+    <div class="space-y-3" @keydown="onKeydown">
       <UFormField label="乗務員" required>
         <div data-employee>
           <EmployeeSelect v-model="form.employee_cd" :employees="employees" />
         </div>
       </UFormField>
 
-      <div class="space-y-2">
-        <div class="text-sm font-medium">期間</div>
-        <div
-          v-for="(row, i) in form.periods"
-          :key="i"
-          class="flex flex-wrap md:flex-nowrap items-end gap-1 rounded border border-(--ui-border) p-2"
-        >
-          <label class="text-xs">
-            <span class="block text-(--ui-text-muted)">区分</span>
-            <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1" @change="onRowChange(i)">
-              <option v-for="k in PERIOD_KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
-            </select>
-          </label>
-          <label class="text-xs">
-            <span class="block text-(--ui-text-muted)">開始日</span>
-            <input
-              v-model="row.start_date"
-              type="date"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1"
-              @change="onDateChange(i)"
-            >
-          </label>
-          <label class="text-xs">
-            <span class="block text-(--ui-text-muted)">終了日</span>
-            <input
-              v-model="row.end_date"
-              type="date"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1"
-              @change="onDateChange(i)"
-            >
-          </label>
-          <label class="text-xs">
-            <span class="block text-(--ui-text-muted)">半日</span>
-            <select
-              v-model="row.half"
-              :disabled="!canSelectHalf(row)"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 disabled:opacity-50"
-              @change="onRowChange(i)"
-            >
-              <option v-for="h in HALF_OPTIONS" :key="h.value" :value="h.value">{{ h.label }}</option>
-            </select>
-          </label>
-          <UBadge v-if="(row.ichiban_row_ids ?? []).length > 0" label="一番星" color="info" variant="subtle" size="sm" />
-          <UButton
-            icon="i-lucide-trash-2"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            aria-label="この期間を消す"
-            @click="removePeriod(i)"
-          />
+      <div class="space-y-2 rounded border border-(--ui-border) p-2">
+        <div class="text-sm font-medium">一番星の候補</div>
+        <div v-if="periods.length > 0" class="text-sm">
+          <div class="text-xs text-(--ui-text-muted)">保存済み</div>
+          <div v-for="(p, i) in periods" :key="i">{{ periodLabel(p) }}</div>
         </div>
-        <UButton icon="i-lucide-plus" label="期間を追加" color="neutral" variant="outline" size="xs" @click="addPeriod" />
+        <div v-if="candidates.length > 0" data-candidates class="space-y-1">
+          <label v-for="(p, n) in candidates" :key="candidateKey(p)" class="flex items-center gap-2 text-sm">
+            <input v-model="checked" type="checkbox" :value="candidateKey(p)">
+            <span><span v-if="n < 9" class="text-(--ui-text-muted)">{{ n + 1 }}.</span> {{ periodLabel(p) }}</span>
+          </label>
+          <p class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づける / Ctrl+Enter 対象外</p>
+        </div>
+        <UButton
+          v-if="form.employee_cd !== '' && candidates.length === 0 && !candidateNotice"
+          label="候補を読み込む"
+          icon="i-lucide-refresh-cw"
+          color="neutral"
+          variant="outline"
+          size="xs"
+          @click="fetchCandidates(form.employee_cd)"
+        />
+        <p v-if="form.employee_cd === ''" class="text-xs text-(--ui-text-muted)">乗務員を選ぶと一番星の候補が出ます</p>
       </div>
 
       <UFormField label="備考">
