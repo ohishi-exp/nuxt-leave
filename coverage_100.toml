@@ -55,3 +55,7 @@ branches = true
 [[files]]
 path = "app/utils/leave-alerts.ts"
 branches = true
+
+[[files]]
+path = "app/utils/upload.ts"
+branches = true

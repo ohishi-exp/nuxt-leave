@@ -268,6 +268,7 @@ export interface FetchOptions {
   body?: unknown
   query?: Record<string, string | number>
   responseType?: 'json' | 'arrayBuffer'
+  headers?: Record<string, string>
 }
 
 export type Fetcher = <T>(url: string, options?: FetchOptions) => Promise<T>
@@ -352,6 +353,13 @@ export function createLeaveApi(fetcher: Fetcher) {
     getPagePdf(id: string): Promise<ArrayBuffer> {
       return fetcher<ArrayBuffer>(pagePdfUrl(id), { responseType: 'arrayBuffer' })
     },
+    uploadPdf(file: Blob): Promise<{ pages: number }> {
+      return fetcher<{ pages: number }>(`${API_BASE}/leave/uploads`, {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': 'application/pdf' },
+      })
+    },
     async listEmployees(): Promise<Employee[]> {
       const r = await fetcher<{ data: Employee[] }>(`${API_BASE}/leave/employees`)
       return r.data
@@ -424,6 +432,8 @@ export function createLeaveApi(fetcher: Fetcher) {
 
 export type LeaveApi = ReturnType<typeof createLeaveApi>
 
+const TOO_LARGE_MESSAGE = '10MB を超えています'
+
 /** back が返すエラーの語 (`{"error":"..."}`) を画面の文にする */
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_body: '入力が正しくありません',
@@ -464,6 +474,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_found: '見つかりません',
   pdf_not_found: 'PDF が見つかりません',
   internal_error: 'サーバーでエラーが起きました',
+  not_pdf: 'PDF ではありません',
+  pdf_too_large: TOO_LARGE_MESSAGE,
+  unreadable_pdf: 'PDF を読めませんでした',
+  too_many_pages: 'ページが多すぎます (50 ページまで)',
+  ingest_failed: '取り込みに失敗しました。少し待ってからやり直してください',
 }
 
 export const FORBIDDEN_MESSAGE = 'この画面は管理者だけが使えます'
@@ -488,6 +503,8 @@ export function isForbidden(e: unknown): boolean {
 /** fetch のエラーを画面に出す 1 文にする (403 は管理者でない旨、既知の語は日本語) */
 export function errorMessage(e: unknown): string {
   if (isForbidden(e)) return FORBIDDEN_MESSAGE
+  // 413 は本文が JSON でない (back の body 上限)
+  if (errorStatus(e) === 413) return TOO_LARGE_MESSAGE
   if (!e || typeof e !== 'object') return String(e)
   const f = e as FetchErrorLike
   const code = f.data?.error
