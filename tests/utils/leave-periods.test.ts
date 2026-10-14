@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest'
 import {
   candidateKey,
   initialCheckedKeys,
+  isRowDirty,
   kindLabel,
   periodLabel,
   PERIOD_KINDS,
+  rowButtons,
   rowKeyAction,
   selectedPeriods,
   toPageUpdateBody,
@@ -138,5 +140,27 @@ describe('PUT body への変換', () => {
     const f: LinkForm = { employee_cd: '1', note: '', periods: [saved], ichiban_row_ids: [] }
     expect('ichiban_row_ids' in toPageUpdateBody(f, 'linked')).toBe(false)
     expect('ichiban_row_ids' in toPageUpdateBody({ ...f, ichiban_row_ids: ['a'] }, 'ignored')).toBe(false)
+  })
+})
+
+describe('行の変更判定とボタン', () => {
+  const base = { employee_cd: '1', note: '', checked: ['a', 'b'] }
+
+  it('乗務員・備考・チェックのどれかが違えば dirty (チェックは順序を無視)', () => {
+    expect(isRowDirty(base, { ...base })).toBe(false)
+    expect(isRowDirty(base, { ...base, checked: ['b', 'a'] })).toBe(false)
+    expect(isRowDirty(base, { ...base, employee_cd: '2' })).toBe(true)
+    expect(isRowDirty(base, { ...base, note: 'x' })).toBe(true)
+    expect(isRowDirty(base, { ...base, checked: ['a'] })).toBe(true)
+    expect(isRowDirty(base, { ...base, checked: ['a', 'c'] })).toBe(true)
+  })
+
+  it('状態ごとのボタン', () => {
+    expect(rowButtons('unlinked', false)).toEqual(['link', 'ignore'])
+    expect(rowButtons('unlinked', true)).toEqual(['link', 'ignore'])
+    expect(rowButtons('linked', true)).toEqual(['relink', 'unlink'])
+    expect(rowButtons('ignored', true)).toEqual(['relink', 'unlink'])
+    expect(rowButtons('linked', false)).toEqual(['unlink'])
+    expect(rowButtons('ignored', false)).toEqual(['unlink'])
   })
 })
