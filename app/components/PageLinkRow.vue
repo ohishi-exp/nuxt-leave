@@ -73,14 +73,14 @@ function submit(status: PageStatus) {
   emit('save', status, f)
 }
 
-/** 次の行へ進んだとき: 見える位置へ寄せて乗務員欄にフォーカスする */
+/** 次の行へ進んだとき: 行の上端を画面の上に合わせて乗務員欄にフォーカスする */
 function focusEmployee() {
-  root.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  root.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   root.value?.querySelector<HTMLElement>('[data-employee] button, [data-employee] input')?.focus({ preventScroll: true })
 }
 
 function scrollHere() {
-  root.value?.scrollIntoView({ block: 'center' })
+  root.value?.scrollIntoView({ block: 'start' })
 }
 
 defineExpose({ focusEmployee, scrollHere })
@@ -89,7 +89,7 @@ defineExpose({ focusEmployee, scrollHere })
 <template>
   <div
     ref="root"
-    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
+    class="scroll-mt-4 grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
     :class="page.status === 'unlinked' ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
   >
     <div class="space-y-1">
