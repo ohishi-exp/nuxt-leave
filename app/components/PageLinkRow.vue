@@ -9,6 +9,7 @@ import {
   rowButtons,
   rowKeyAction,
   selectedPeriods,
+  unmatchedSaved,
   validateLinkForm,
   type LinkForm,
 } from '~/utils/leave-periods'
@@ -62,9 +63,13 @@ watch(() => [props.page, props.periods], () => {
   // 作り直しで employee_cd が変わる分は、乗務員を選んだ操作ではないので候補を引かない
   if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
   form.value = next
-  checked.value = []
-  initial.value = { ...next, checked: [] }
+  // 取得済みの候補があれば、保存済みと同じ候補をチェックし直す (開いた直後を dirty にしない)
+  checked.value = initialCheckedKeys(candidates.value, props.periods)
+  initial.value = { ...next, checked: [...checked.value] }
 })
+
+/** 候補で表せない保存済みの期間だけ「保存済み」に出す */
+const savedOnly = computed(() => unmatchedSaved(candidates.value, props.periods))
 
 /** 乗務員を選んだら一番星の候補を引く。1 つだけなら最初からチェックし、2 つ以上は選んでもらう */
 async function fetchCandidates(cd: string, focus = true) {
@@ -73,6 +78,8 @@ async function fetchCandidates(cd: string, focus = true) {
     if (form.value.employee_cd !== cd) return
     candidates.value = res.periods
     checked.value = initialCheckedKeys(res.periods, props.periods)
+    // 開いたときの乗務員のままなら、この初期チェックを「変えていない」基準にする
+    if (cd === initial.value.employee_cd) initial.value = { ...initial.value, checked: [...checked.value] }
     if (res.periods.length === 0) {
       candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
       return
@@ -91,6 +98,11 @@ async function fetchCandidates(cd: string, focus = true) {
 
 // 乗務員を選び直したら一番星の候補を取り直す。
 // props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間はそのまま)
+// 保存済みの行は開いたとき候補を引き、保存済みと同じ候補にチェックを付ける
+onMounted(() => {
+  if (props.page.status !== 'unlinked' && form.value.employee_cd !== '') fetchCandidates(form.value.employee_cd, false)
+})
+
 watch(() => form.value.employee_cd, async (cd, old) => {
   candidateNotice.value = ''
   candidates.value = []
@@ -216,9 +228,9 @@ defineExpose({ focusEmployee, scrollHere })
 
       <div class="space-y-2 rounded border border-(--ui-border) p-2">
         <div class="text-sm font-medium">一番星の候補</div>
-        <div v-if="periods.length > 0" class="text-sm">
+        <div v-if="savedOnly.length > 0" class="text-sm">
           <div class="text-xs text-(--ui-text-muted)">保存済み</div>
-          <div v-for="(p, i) in periods" :key="i">{{ periodLabel(p) }}</div>
+          <div v-for="(p, i) in savedOnly" :key="i">{{ periodLabel(p) }}</div>
         </div>
         <div v-if="candidates.length > 0" data-candidates class="space-y-1">
           <label v-for="(p, n) in candidates" :key="candidateKey(p)" class="flex items-center gap-2 text-sm">

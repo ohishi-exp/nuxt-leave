@@ -10,6 +10,7 @@ import {
   rowKeyAction,
   selectedPeriods,
   toPageUpdateBody,
+  unmatchedSaved,
   validateLinkForm,
   type LinkForm,
 } from '~/utils/leave-periods'
@@ -47,12 +48,27 @@ describe('一番星の候補', () => {
     expect(periodLabel(cand('2026-10-01', '2026-10-01', ['a'], 'pm'))).toBe('有休 2026-10-01 (午後)')
   })
 
-  it('initialCheckedKeys: 候補 1 つで保存済みが無いときだけチェック済み', () => {
+  it('initialCheckedKeys: 保存済みと同じ候補、無ければ候補 1 つだけチェック済み', () => {
     const one = [cand('2026-10-01', '2026-10-01', ['a'])]
     expect(initialCheckedKeys(one, [])).toEqual(['a'])
     expect(initialCheckedKeys(one, [saved])).toEqual([])
     expect(initialCheckedKeys([...one, cand('2026-10-02', '2026-10-02', ['b'])], [])).toEqual([])
     expect(initialCheckedKeys([], [])).toEqual([])
+    const s1: LeavePeriod = { kind: 'yukyu', start_date: '2026-10-01', end_date: '2026-10-01', half: null }
+    const two = [...one, cand('2026-10-02', '2026-10-02', ['b'])]
+    expect(initialCheckedKeys(two, [s1])).toEqual(['a'])
+    expect(initialCheckedKeys(one, [{ ...s1, half: 'am' }])).toEqual([])
+    expect(initialCheckedKeys(one, [{ ...s1, kind: 'rousai' }])).toEqual([])
+    expect(initialCheckedKeys(one, [{ ...s1, start_date: '2026-10-02' }])).toEqual([])
+    expect(initialCheckedKeys(one, [{ ...s1, end_date: '2026-10-02' }])).toEqual([])
+  })
+
+  it('unmatchedSaved: 候補に対応の無い保存済みだけ', () => {
+    const s1: LeavePeriod = { kind: 'yukyu', start_date: '2026-10-01', end_date: '2026-10-01', half: null }
+    const one = [cand('2026-10-01', '2026-10-01', ['a'])]
+    expect(unmatchedSaved(one, [s1, saved])).toEqual([saved])
+    expect(unmatchedSaved([], [s1])).toEqual([s1])
+    expect(unmatchedSaved(one, [])).toEqual([])
   })
 
   it('selectedPeriods: チェックした候補だけ。行 ID は重複なし', () => {
@@ -140,6 +156,13 @@ describe('PUT body への変換', () => {
       .toEqual({ employee_cd: '1021', status: 'linked', note: '重複', periods: [saved], ichiban_row_ids: ['a'] })
     expect(toPageUpdateBody({ employee_cd: '', note: '  ', periods: [], ichiban_row_ids: [] }, 'ignored'))
       .toEqual({ employee_cd: null, status: 'ignored', note: null, periods: [] })
+  })
+
+  it('unlinked / ignored は保存済みの期間があっても periods 空', () => {
+    const f: LinkForm = { employee_cd: '1', note: '', periods: [saved], ichiban_row_ids: ['a'] }
+    expect(toPageUpdateBody(f, 'unlinked').periods).toEqual([])
+    expect(toPageUpdateBody(f, 'ignored').periods).toEqual([])
+    expect(toPageUpdateBody(f, 'linked').periods).toEqual([saved])
   })
 
   it('行 ID が無い・linked 以外はキーを付けない', () => {

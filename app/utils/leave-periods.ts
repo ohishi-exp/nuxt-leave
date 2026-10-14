@@ -37,10 +37,23 @@ export function periodLabel(p: { kind: string, start_date: string, end_date: str
   return `${kindLabel(p.kind)} ${days}${half}`
 }
 
-/** 候補が 1 つだけで、保存済みの期間も無いときだけ最初からチェックする */
+/** 候補と保存済みの期間が同じか (区分・開始・終了・半日) */
+function samePeriod(c: IchibanCandidatePeriod, p: LeavePeriod): boolean {
+  return c.kind === p.kind && c.start_date === p.start_date && c.end_date === p.end_date && c.half === p.half
+}
+
+/**
+ * 最初にチェックする候補。保存済みの期間と同じ候補はチェック済み。
+ * 保存済みが無いときは、候補が 1 つだけならチェックする。
+ */
 export function initialCheckedKeys(candidates: IchibanCandidatePeriod[], saved: LeavePeriod[]): string[] {
-  const only = candidates.length === 1 && saved.length === 0 ? candidates[0] : undefined
-  return only ? [candidateKey(only)] : []
+  if (saved.length > 0) return candidates.filter(c => saved.some(p => samePeriod(c, p))).map(candidateKey)
+  return candidates.length === 1 ? [candidateKey(candidates[0]!)] : []
+}
+
+/** 候補で表せない保存済みの期間 (「保存済み」の行に出すもの) */
+export function unmatchedSaved(candidates: IchibanCandidatePeriod[], saved: LeavePeriod[]): LeavePeriod[] {
+  return saved.filter(p => !candidates.some(c => samePeriod(c, p)))
 }
 
 /**
@@ -77,7 +90,8 @@ export function toPageUpdateBody(form: LinkForm, status: PageStatus): PageUpdate
     employee_cd: cd === '' ? null : cd,
     status,
     note: note === '' ? null : note,
-    periods: form.periods,
+    // 紐づけ済み以外 (未紐づけに戻す・対象外) は期間を残さない
+    periods: status === 'linked' ? form.periods : [],
   }
   if (status === 'linked' && form.ichiban_row_ids.length > 0) body.ichiban_row_ids = form.ichiban_row_ids
   return body
