@@ -113,3 +113,27 @@ export function rowKeyAction(i: RowKeyInput): RowKeyAction | null {
   const n = /^[1-9]$/.test(i.key) ? Number(i.key) : 0
   return n >= 1 && n <= i.candidateCount ? { type: 'toggle', index: n - 1 } : null
 }
+
+/** 行の入力値 (開いたときと今を比べるための最小の形) */
+export interface RowValues {
+  employee_cd: string
+  note: string
+  /** チェックした候補の key */
+  checked: string[]
+}
+
+/** 開いたときの値から変わったか。チェックした候補は順序を無視した集合で比べる */
+export function isRowDirty(initial: RowValues, current: RowValues): boolean {
+  if (initial.employee_cd !== current.employee_cd || initial.note !== current.note) return true
+  const a = new Set(initial.checked)
+  const b = new Set(current.checked)
+  return a.size !== b.size || [...a].some(k => !b.has(k))
+}
+
+export type RowButton = 'link' | 'relink' | 'ignore' | 'unlink'
+
+/** 状態で出すボタン: 未紐づけは 紐づける・対象外 / 紐づけ済み・対象外は 未紐づけに戻す (変えたときだけ 紐づけ直す も) */
+export function rowButtons(status: PageStatus, dirty: boolean): RowButton[] {
+  if (status === 'unlinked') return ['link', 'ignore']
+  return dirty ? ['relink', 'unlink'] : ['unlink']
+}

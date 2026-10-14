@@ -4,7 +4,9 @@ import type { Employee, IchibanCandidatePeriod, LeavePage, LeavePeriod, PageStat
 import {
   candidateKey,
   initialCheckedKeys,
+  isRowDirty,
   periodLabel,
+  rowButtons,
   rowKeyAction,
   selectedPeriods,
   validateLinkForm,
@@ -47,6 +49,12 @@ const candidateNotice = ref('')
 /** 一番星の候補 (乗務員の欄の下に並べ、チェックしたものが期間になる) */
 const candidates = ref<IchibanCandidatePeriod[]>([])
 const checked = ref<string[]>([])
+/** 行を開いたとき (props から form を作り直したとき) の値。ボタンの出し分けの基準 */
+const initial = ref({ ...form.value, checked: [] as string[] })
+const buttons = computed(() => rowButtons(
+  props.page.status,
+  isRowDirty(initial.value, { ...form.value, checked: checked.value }),
+))
 
 // 保存・再取得で page / periods が差し替わったら、フォームも保存された値に合わせる
 watch(() => [props.page, props.periods], () => {
@@ -55,6 +63,7 @@ watch(() => [props.page, props.periods], () => {
   if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
   form.value = next
   checked.value = []
+  initial.value = { ...next, checked: [] }
 })
 
 /** 乗務員を選んだら一番星の候補を引く。1 つだけなら最初からチェックし、2 つ以上は選んでもらう */
@@ -122,8 +131,12 @@ function onKeydown(ev: KeyboardEvent) {
   })
   if (!act || ev.isComposing) return
   ev.preventDefault()
-  if (act.type === 'link') submit('linked')
-  else if (act.type === 'ignore') submit('ignored')
+  if (act.type === 'link') {
+    if (buttons.value.includes('link') || buttons.value.includes('relink')) submit('linked')
+  }
+  else if (act.type === 'ignore') {
+    if (buttons.value.includes('ignore')) submit('ignored')
+  }
   else if (act.type === 'toggle') boxes[act.index]?.click()
   else if (act.type === 'toggle-focused') (el as HTMLInputElement).click()
   else {
@@ -195,7 +208,8 @@ defineExpose({ focusEmployee, scrollHere })
             <input v-model="checked" type="checkbox" :value="candidateKey(p)">
             <span><span v-if="n < 9" class="text-(--ui-text-muted)">{{ n + 1 }}.</span> {{ periodLabel(p) }}</span>
           </label>
-          <p class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づける / Ctrl+Enter 対象外</p>
+          <p v-if="page.status === 'unlinked'" class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づける / Ctrl+Enter 対象外</p>
+          <p v-else class="text-xs text-(--ui-text-muted)">↑↓ 移動 / Space・数字 選択 / Enter 紐づけ直す (変えたときだけ)</p>
         </div>
         <UButton
           v-if="form.employee_cd !== '' && candidates.length === 0 && !candidateNotice"
@@ -231,9 +245,10 @@ defineExpose({ focusEmployee, scrollHere })
       </UAlert>
 
       <div class="flex flex-wrap gap-2">
-        <UButton label="紐づける" icon="i-lucide-link" :loading="saving" :disabled="!!loadError" @click="submit('linked')" />
-        <UButton label="対象外" color="neutral" variant="outline" :disabled="saving || !!loadError" @click="submit('ignored')" />
-        <UButton label="未紐づけに戻す" color="neutral" variant="ghost" :disabled="saving || !!loadError" @click="submit('unlinked')" />
+        <UButton v-if="buttons.includes('link')" label="紐づける" icon="i-lucide-link" :loading="saving" :disabled="!!loadError" @click="submit('linked')" />
+        <UButton v-if="buttons.includes('relink')" label="紐づけ直す" icon="i-lucide-link" :loading="saving" :disabled="!!loadError" @click="submit('linked')" />
+        <UButton v-if="buttons.includes('ignore')" label="対象外" color="neutral" variant="outline" :disabled="saving || !!loadError" @click="submit('ignored')" />
+        <UButton v-if="buttons.includes('unlink')" label="未紐づけに戻す" color="neutral" variant="ghost" :disabled="saving || !!loadError" @click="submit('unlinked')" />
       </div>
     </div>
   </div>
