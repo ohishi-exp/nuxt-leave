@@ -82,7 +82,8 @@ async function fetchCandidates(cd: string, focus = true) {
     // 開いたときの乗務員のままなら、この初期チェックを「変えていない」基準にする
     if (cd === initial.value.employee_cd) initial.value = { ...initial.value, checked: [...checked.value] }
     if (res.periods.length === 0) {
-      candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
+      // 保存済みの期間があるときは、候補の窓の外でも案内しない (保存済みは別に出る)
+      if (props.periods.length === 0) candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
       return
     }
     // 乗務員を確定して候補が返ったら、キーボードだけで続けられるよう候補一覧へフォーカスを移す
@@ -191,7 +192,8 @@ defineExpose({ focusEmployee, scrollHere })
 <template>
   <div
     ref="root"
-    class="scroll-mt-16 grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
+    style="scroll-margin-top: calc(var(--sticky-h, 0px) + 12px)"
+    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
     :class="page.status === 'unlinked' ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
   >
     <div class="space-y-1">
