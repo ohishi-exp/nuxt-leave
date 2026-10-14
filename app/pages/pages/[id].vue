@@ -168,6 +168,26 @@ async function onSave(index: number, status: PageStatus, form: LinkForm) {
 }
 
 watch(id, load)
+
+// 固定バーの実高さ (折り返しで変わる) を --sticky-h に入れ、行の scroll-margin-top に使う
+const stickyBar = ref<HTMLElement | null>(null)
+const stickyH = ref(0)
+let stickyObserver: ResizeObserver | null = null
+watch(stickyBar, (el) => {
+  stickyObserver?.disconnect()
+  stickyObserver = null
+  if (!el) {
+    stickyH.value = 0
+    return
+  }
+  stickyH.value = el.offsetHeight
+  stickyObserver = new ResizeObserver(() => {
+    stickyH.value = el.offsetHeight
+  })
+  stickyObserver.observe(el)
+})
+onBeforeUnmount(() => stickyObserver?.disconnect())
+
 onMounted(() => {
   load()
   loadEmployees()
@@ -175,7 +195,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4" :style="{ '--sticky-h': `${stickyH}px` }">
     <div class="flex items-center gap-2">
       <UButton to="/" icon="i-lucide-arrow-left" label="一覧へ" color="neutral" variant="ghost" size="sm" />
       <h1 class="text-xl font-bold">申請書の紐づけ</h1>
@@ -186,7 +206,7 @@ onMounted(() => {
     <div v-else-if="loading" class="text-(--ui-text-muted)">読み込み中…</div>
 
     <template v-else-if="head">
-      <div class="sticky top-0 z-10 border-b border-(--ui-border) bg-(--ui-bg) py-2">
+      <div ref="stickyBar" class="sticky top-0 z-10 border-b border-(--ui-border) bg-(--ui-bg) py-2">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <label class="flex items-center gap-2">
             <span class="font-medium">PDF の基準日</span>
