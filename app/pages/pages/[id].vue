@@ -40,6 +40,8 @@ const error = ref('')
 const forbidden = ref(false)
 const pdfError = ref('')
 const employeesError = ref('')
+const baseDateSaving = ref(false)
+const baseDateError = ref('')
 const rowRefs = new Map<string, RowHandle>()
 
 const { doc, error: openError } = usePdfDoc(pdf)
@@ -111,6 +113,28 @@ async function load() {
   rowRefs.get(id.value)?.scrollHere()
 }
 
+/** 基準日を変える。成功したら全行の base_date だけ書き換える (入力中の乗務員・チェックを消さない) */
+async function saveBaseDate(value: string | null) {
+  const first = rows.value[0]
+  if (!first || baseDateSaving.value) return
+  baseDateSaving.value = true
+  baseDateError.value = ''
+  try {
+    await api.setBaseDate(first.page.id, value)
+    for (const r of rows.value) r.page.base_date = value
+  }
+  catch {
+    baseDateError.value = '基準日を保存できませんでした'
+  }
+  finally {
+    baseDateSaving.value = false
+  }
+}
+
+function onBaseDateChange(value: string) {
+  saveBaseDate(value === '' ? null : value)
+}
+
 async function loadEmployees() {
   try {
     employees.value = await api.listEmployees()
@@ -162,14 +186,39 @@ onMounted(() => {
     <div v-else-if="loading" class="text-(--ui-text-muted)">読み込み中…</div>
 
     <template v-else-if="head">
+      <div class="sticky top-0 z-10 border-b border-(--ui-border) bg-(--ui-bg) py-2">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <label class="flex items-center gap-2">
+            <span class="font-medium">PDF の基準日</span>
+            <input
+              type="date"
+              :value="head.base_date ?? ''"
+              :disabled="baseDateSaving"
+              class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1"
+              @change="onBaseDateChange(($event.target as HTMLInputElement).value)"
+            >
+          </label>
+          <UButton
+            v-if="head.base_date"
+            label="空に戻す"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :disabled="baseDateSaving"
+            @click="saveBaseDate(null)"
+          />
+          <span v-else class="text-(--ui-text-muted)">受信日 {{ effectiveBaseDate({ base_date: null, received_at: head.received_at }) }}</span>
+          <span class="text-(--ui-text-muted)">一番星の候補: {{ effectiveBaseDate(head) }} の前後 7 日</span>
+          <span v-if="baseDateError" class="text-(--ui-color-error)">{{ baseDateError }}</span>
+        </div>
+      </div>
       <section class="space-y-2">
         <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt class="text-(--ui-text-muted)">受信日時</dt>
           <dd>{{ formatDateTime(head.received_at) }}</dd>
           <dt class="text-(--ui-text-muted)">進み具合</dt>
           <dd>全 {{ rows.length }} ページ中 未紐づけ {{ unlinkedCount }}</dd>
-          <dt class="text-(--ui-text-muted)">一番星の候補</dt>
-          <dd>{{ head.base_date ? '基準日' : '受信日' }} {{ effectiveBaseDate(head) }} の前後 7 日</dd>
         </dl>
         <UAlert v-if="pdfError" color="error" :title="pdfError" />
         <UAlert v-if="openError" color="error" :title="openError" />

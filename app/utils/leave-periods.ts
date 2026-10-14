@@ -90,6 +90,7 @@ export type RowKeyAction =
   | { type: 'toggle', index: number }
   | { type: 'link' }
   | { type: 'ignore' }
+  | { type: 'focusCandidates' }
 
 export interface RowKeyInput {
   key: string
@@ -102,11 +103,13 @@ export interface RowKeyInput {
   candidateCount: number
 }
 
-/** 1 行の中のキー操作: ↑↓ 移動 / Space・1〜9 選択 / Enter 紐づける / Ctrl(⌘)+Enter 対象外 */
+/** 1 行の中のキー操作: 乗務員 Enter で候補へ / ↑↓ 移動 / Space・1〜9 選択 / Enter 紐づける / Ctrl(⌘)+Enter 対象外 (紐づけ・対象外は候補一覧の中だけ) */
 export function rowKeyAction(i: RowKeyInput): RowKeyAction | null {
   if (i.zone === 'other' || i.menuOpen) return null
+  if (i.zone === 'employee') {
+    return i.key === 'Enter' && !i.ctrlKey && !i.metaKey && i.candidateCount > 0 ? { type: 'focusCandidates' } : null
+  }
   if (i.key === 'Enter') return i.ctrlKey || i.metaKey ? { type: 'ignore' } : { type: 'link' }
-  if (i.zone !== 'candidates') return null
   if (i.key === 'ArrowUp') return { type: 'move', delta: -1 }
   if (i.key === 'ArrowDown') return { type: 'move', delta: 1 }
   if (i.key === ' ') return { type: 'toggle-focused' }

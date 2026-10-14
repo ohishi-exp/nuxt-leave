@@ -101,11 +101,17 @@ describe('rowKeyAction', () => {
     expect(act('Enter', { zone: 'employee', menuOpen: true })).toBeNull()
   })
 
-  it('Enter = 紐づける、Ctrl / ⌘ + Enter = 対象外', () => {
+  it('候補一覧の中: Enter = 紐づける、Ctrl / ⌘ + Enter = 対象外', () => {
     expect(act('Enter')).toEqual({ type: 'link' })
-    expect(act('Enter', { zone: 'employee' })).toEqual({ type: 'link' })
     expect(act('Enter', { ctrlKey: true })).toEqual({ type: 'ignore' })
-    expect(act('Enter', { metaKey: true, zone: 'employee' })).toEqual({ type: 'ignore' })
+    expect(act('Enter', { metaKey: true })).toEqual({ type: 'ignore' })
+  })
+
+  it('乗務員の欄の Enter は送信せず候補へ (候補が無ければ何もしない)', () => {
+    expect(act('Enter', { zone: 'employee' })).toEqual({ type: 'focusCandidates' })
+    expect(act('Enter', { zone: 'employee', candidateCount: 0 })).toBeNull()
+    expect(act('Enter', { zone: 'employee', ctrlKey: true })).toBeNull()
+    expect(act('Enter', { zone: 'employee', metaKey: true })).toBeNull()
   })
 
   it('乗務員の欄では Enter 以外は効かない', () => {
