@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  effectiveBaseDate,
   formatDateTime,
   hasNextPage,
   isPageStatus,
@@ -60,5 +61,20 @@ describe('タブの値', () => {
     expect(tabFromQuery(tabs, 'b', 'a')).toBe('b')
     expect(tabFromQuery(tabs, ['b'], 'a')).toBe('a')
     expect(tabFromQuery(tabs, undefined, 'a')).toBe('a')
+  })
+})
+
+describe('effectiveBaseDate', () => {
+  it('基準日があればそれを返す', () => {
+    expect(effectiveBaseDate({ base_date: '2026-10-01', received_at: '2026-10-10T05:05:00Z' })).toBe('2026-10-01')
+  })
+
+  it('無ければ受信日の JST の日 (UTC 15 時以降は翌日)', () => {
+    expect(effectiveBaseDate({ base_date: null, received_at: '2026-10-10T05:05:00Z' })).toBe('2026-10-10')
+    expect(effectiveBaseDate({ base_date: null, received_at: '2026-10-10T16:00:00Z' })).toBe('2026-10-11')
+  })
+
+  it('受信日が読めなければ空', () => {
+    expect(effectiveBaseDate({ base_date: null, received_at: 'x' })).toBe('')
   })
 })
