@@ -89,7 +89,7 @@ defineExpose({ focusEmployee, scrollHere })
 <template>
   <div
     ref="root"
-    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_22rem]"
+    class="grid gap-4 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_28rem]"
     :class="page.status === 'unlinked' ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
   >
     <div class="space-y-1">
@@ -130,38 +130,38 @@ defineExpose({ focusEmployee, scrollHere })
         <div
           v-for="(row, i) in form.periods"
           :key="i"
-          class="flex flex-wrap items-end gap-2 rounded border border-(--ui-border) p-2"
+          class="flex flex-wrap md:flex-nowrap items-end gap-1 rounded border border-(--ui-border) p-2"
         >
-          <label class="text-sm">
+          <label class="text-xs">
             <span class="block text-(--ui-text-muted)">区分</span>
-            <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1">
+            <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1">
               <option v-for="k in PERIOD_KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
             </select>
           </label>
-          <label class="text-sm">
+          <label class="text-xs">
             <span class="block text-(--ui-text-muted)">開始日</span>
             <input
               v-model="row.start_date"
               type="date"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1"
+              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1"
               @change="onDateChange(i)"
             >
           </label>
-          <label class="text-sm">
+          <label class="text-xs">
             <span class="block text-(--ui-text-muted)">終了日</span>
             <input
               v-model="row.end_date"
               type="date"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1"
+              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1"
               @change="onDateChange(i)"
             >
           </label>
-          <label class="text-sm">
+          <label class="text-xs">
             <span class="block text-(--ui-text-muted)">半日</span>
             <select
               v-model="row.half"
               :disabled="!canSelectHalf(row)"
-              class="rounded border border-(--ui-border) bg-(--ui-bg) px-2 py-1 disabled:opacity-50"
+              class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 disabled:opacity-50"
             >
               <option v-for="h in HALF_OPTIONS" :key="h.value" :value="h.value">{{ h.label }}</option>
             </select>
@@ -170,7 +170,7 @@ defineExpose({ focusEmployee, scrollHere })
             icon="i-lucide-trash-2"
             color="neutral"
             variant="ghost"
-            size="sm"
+            size="xs"
             aria-label="この期間を消す"
             @click="removePeriod(i)"
           />
