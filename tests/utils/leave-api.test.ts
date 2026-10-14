@@ -308,9 +308,18 @@ describe('カレンダーと付与台帳', () => {
 })
 
 describe('listAlerts', () => {
-  it('alerts を返す', async () => {
-    const { fetcher, calls } = fakeFetcher({ alerts: [{ employee_cd: '1' }] })
-    expect(await createLeaveApi(fetcher).listAlerts()).toEqual([{ employee_cd: '1' }])
+  it('alerts と from/to を返す', async () => {
+    const { fetcher, calls } = fakeFetcher({ alerts: [{ employee_cd: '1' }], from: '2026-08-01', to: '2026-10-13' })
+    expect(await createLeaveApi(fetcher).listAlerts()).toEqual({
+      alerts: [{ employee_cd: '1' }],
+      from: '2026-08-01',
+      to: '2026-10-13',
+    })
     expect(calls[0]!.url).toBe('/api/proxy/api/leave/alerts')
+  })
+
+  it('古い back (from/to 無し) は undefined', async () => {
+    const { fetcher } = fakeFetcher({ alerts: [] })
+    expect(await createLeaveApi(fetcher).listAlerts()).toEqual({ alerts: [], from: undefined, to: undefined })
   })
 })
