@@ -2,7 +2,9 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { Employee, LeavePage, LeavePeriod, PageStatus } from '~/utils/leave-api'
 import {
+  applyCandidates,
   canSelectHalf,
+  clearIchibanMark,
   HALF_OPTIONS,
   linkFormFromPage,
   newPeriodRow,
@@ -42,15 +44,49 @@ function initialForm(): LinkForm {
 }
 
 const form = ref<LinkForm>(initialForm())
+/** props 由来の作り直しで入った employee_cd (次の watch 1 回だけ候補を引かない) */
+let syncedCd: string | null = null
 
 // 保存・再取得で page / periods が差し替わったら、フォームも保存された値に合わせる
 watch(() => [props.page, props.periods], () => {
-  form.value = initialForm()
+  const next = initialForm()
+  // 作り直しで employee_cd が変わる分は、乗務員を選んだ操作ではないので候補を引かない
+  if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
+  form.value = next
+})
+
+const api = useLeaveApi()
+const candidateNotice = ref('')
+
+// 乗務員を選び直したら一番星の休暇の行で期間を埋める。
+// props 由来の form 作り直しでは employee_cd の変化を拾わない (保存済みの期間を上書きしない)
+watch(() => form.value.employee_cd, async (cd, old) => {
+  candidateNotice.value = ''
+  if (cd === syncedCd) {
+    syncedCd = null
+    return
+  }
+  if (cd === '' || cd === old) return
+  try {
+    const res = await api.getCandidates(props.page.id, cd)
+    if (form.value.employee_cd !== cd) return
+    form.value.periods = applyCandidates(form.value.periods, res.periods)
+    if (res.periods.length === 0) candidateNotice.value = '一番星に記録がありません (手入力してください)'
+  }
+  catch {
+    if (form.value.employee_cd !== cd) return
+    candidateNotice.value = '一番星を読めませんでした (手入力してください)'
+  }
 })
 
 function onDateChange(i: number) {
   const row = form.value.periods[i]
-  if (row) form.value.periods[i] = normalizePeriodRow(row)
+  if (row) form.value.periods[i] = normalizePeriodRow(clearIchibanMark(row))
+}
+
+function onRowChange(i: number) {
+  const row = form.value.periods[i]
+  if (row) form.value.periods[i] = clearIchibanMark(row)
 }
 
 function addPeriod() {
@@ -134,7 +170,7 @@ defineExpose({ focusEmployee, scrollHere })
         >
           <label class="text-xs">
             <span class="block text-(--ui-text-muted)">区分</span>
-            <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1">
+            <select v-model="row.kind" class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1" @change="onRowChange(i)">
               <option v-for="k in PERIOD_KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
             </select>
           </label>
@@ -162,10 +198,12 @@ defineExpose({ focusEmployee, scrollHere })
               v-model="row.half"
               :disabled="!canSelectHalf(row)"
               class="rounded border border-(--ui-border) bg-(--ui-bg) px-1 py-1 disabled:opacity-50"
+              @change="onRowChange(i)"
             >
               <option v-for="h in HALF_OPTIONS" :key="h.value" :value="h.value">{{ h.label }}</option>
             </select>
           </label>
+          <UBadge v-if="(row.ichiban_row_ids ?? []).length > 0" label="一番星" color="info" variant="subtle" size="sm" />
           <UButton
             icon="i-lucide-trash-2"
             color="neutral"
@@ -181,6 +219,8 @@ defineExpose({ focusEmployee, scrollHere })
       <UFormField label="備考">
         <UTextarea v-model="form.note" :rows="2" class="w-full" />
       </UFormField>
+
+      <UAlert v-if="candidateNotice" color="warning" :description="candidateNotice" />
 
       <UAlert v-if="formErrors.length > 0 || error" color="error" title="保存できません">
         <template #description>

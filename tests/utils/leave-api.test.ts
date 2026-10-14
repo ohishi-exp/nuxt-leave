@@ -231,6 +231,16 @@ describe('カレンダーと付与台帳', () => {
     })
   })
 
+  it('getCandidates は pages/{id}/candidates に employee_cd を query で渡す', async () => {
+    const { fetcher, calls } = fakeFetcher({ periods: [] })
+    const r = await createLeaveApi(fetcher).getCandidates('p1', '101')
+    expect(r).toEqual({ periods: [] })
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/pages/p1/candidates',
+      options: { query: { employee_cd: '101' } },
+    })
+  })
+
   it('listGrants は employee_cd を query で渡す', async () => {
     const { fetcher, calls } = fakeFetcher({ data: [] })
     await createLeaveApi(fetcher).listGrants('101')

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  applyCandidates,
+  candidateToPeriodRow,
   canSelectHalf,
+  clearIchibanMark,
   HALF_OPTIONS,
   kindLabel,
   linkFormFromPage,
@@ -125,5 +128,66 @@ describe('PUT body への変換', () => {
     })
     expect(linkFormFromPage({ employee_cd: '1', note: 'n', periods: [] }))
       .toEqual({ employee_cd: '1', note: 'n', periods: [] })
+  })
+})
+
+describe('一番星の候補', () => {
+  const cand = (start: string, end: string, ids: string[], half: 'am' | 'pm' | null = null) =>
+    ({
+      kind: 'yukyu' as const,
+      start_date: start,
+      end_date: end,
+      half,
+      rows: ids.map(id => ({ row_id: id, day: start, item_name: '有休' })),
+    })
+  const marked = (start: string, end: string, ids: string[]): PeriodRow => ({ ...row(start, end), ichiban_row_ids: ids })
+
+  it('candidateToPeriodRow は half の null を空文字にして行 ID を持つ', () => {
+    expect(candidateToPeriodRow(cand('2026-10-01', '2026-10-02', ['a', 'b']))).toEqual(marked('2026-10-01', '2026-10-02', ['a', 'b']))
+    expect(candidateToPeriodRow(cand('2026-10-01', '2026-10-01', ['a'], 'pm')).half).toBe('pm')
+  })
+
+  it('applyCandidates: 前の乗務員の候補を取り除いて新しい候補にする', () => {
+    const r = applyCandidates([marked('2026-09-01', '2026-09-01', ['x'])], [cand('2026-10-01', '2026-10-01', ['a'])])
+    expect(r).toEqual([marked('2026-10-01', '2026-10-01', ['a'])])
+  })
+
+  it('applyCandidates: 残りが全部空なら埋める', () => {
+    const r = applyCandidates([row('', '')], [cand('2026-10-01', '2026-10-01', ['a'])])
+    expect(r).toEqual([marked('2026-10-01', '2026-10-01', ['a'])])
+  })
+
+  it('applyCandidates: 候補 0 件なら空の 1 行', () => {
+    expect(applyCandidates([marked('2026-09-01', '2026-09-01', ['x'])], [])).toEqual([newPeriodRow()])
+    expect(applyCandidates([], [])).toEqual([newPeriodRow()])
+  })
+
+  it('applyCandidates: 手入力の行があれば上書きしない (印付きだけ外す)', () => {
+    const manual = row('2026-10-05', '2026-10-05')
+    expect(applyCandidates([manual, marked('2026-09-01', '2026-09-01', ['x'])], [cand('2026-10-01', '2026-10-01', ['a'])]))
+      .toEqual([manual])
+  })
+
+  it('clearIchibanMark は印だけ外す', () => {
+    expect(clearIchibanMark(marked('2026-10-01', '2026-10-01', ['a']))).toEqual(row('2026-10-01', '2026-10-01'))
+  })
+
+  it('toPageUpdateBody: 印ありは ichiban_row_ids を重複なしで送る', () => {
+    const form: LinkForm = {
+      employee_cd: '1',
+      note: '',
+      periods: [marked('2026-10-01', '2026-10-01', ['a', 'b']), marked('2026-10-02', '2026-10-02', ['b', 'c'])],
+    }
+    const body = toPageUpdateBody(form, 'linked')
+    expect(body.ichiban_row_ids).toEqual(['a', 'b', 'c'])
+    expect(body.periods[0]).toEqual({ kind: 'yukyu', start_date: '2026-10-01', end_date: '2026-10-01', half: null })
+  })
+
+  it('toPageUpdateBody: 印なし・linked 以外はキーを付けない', () => {
+    const plain: LinkForm = { employee_cd: '1', note: '', periods: [row('2026-10-01', '2026-10-01')] }
+    expect('ichiban_row_ids' in toPageUpdateBody(plain, 'linked')).toBe(false)
+    const withMark: LinkForm = { ...plain, periods: [marked('2026-10-01', '2026-10-01', ['a'])] }
+    expect('ichiban_row_ids' in toPageUpdateBody(withMark, 'ignored')).toBe(false)
+    expect('ichiban_row_ids' in toPageUpdateBody({ ...plain, periods: [{ ...row('', ''), ichiban_row_ids: [] }] }, 'linked')).toBe(false)
   })
 })

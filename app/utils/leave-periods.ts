@@ -3,7 +3,7 @@
  * 規則は back (rust-leave-worker の pages.rs) と同じ: 逆順不可・半日は単日だけ・
  * linked は乗務員と期間 1 行以上が必須。
  */
-import type { Half, LeavePeriod, PageStatus, PageUpdateBody, PeriodKind } from './leave-api'
+import type { Half, IchibanCandidatePeriod, LeavePeriod, PageStatus, PageUpdateBody, PeriodKind } from './leave-api'
 
 export const PERIOD_KINDS: { value: PeriodKind, label: string }[] = [
   { value: 'yukyu', label: '有休' },
@@ -28,6 +28,8 @@ export interface PeriodRow {
   start_date: string
   end_date: string
   half: '' | Half
+  /** 非空 = 一番星の行から埋めた期間 (保存時に back へ送る) */
+  ichiban_row_ids?: string[]
 }
 
 export interface LinkForm {
@@ -88,12 +90,46 @@ export function toPeriodBody(row: PeriodRow): LeavePeriod {
 export function toPageUpdateBody(form: LinkForm, status: PageStatus): PageUpdateBody {
   const cd = form.employee_cd.trim()
   const note = form.note.trim()
-  return {
+  const body: PageUpdateBody = {
     employee_cd: cd === '' ? null : cd,
     status,
     note: note === '' ? null : note,
     periods: form.periods.map(toPeriodBody),
   }
+  if (status === 'linked') {
+    const ids = [...new Set(form.periods.flatMap(r => r.ichiban_row_ids ?? []))]
+    if (ids.length > 0) body.ichiban_row_ids = ids
+  }
+  return body
+}
+
+/** 一番星の期間の候補 → フォームの行 (印付き) */
+export function candidateToPeriodRow(p: IchibanCandidatePeriod): PeriodRow {
+  return {
+    kind: p.kind,
+    start_date: p.start_date,
+    end_date: p.end_date,
+    half: p.half ?? '',
+    ichiban_row_ids: p.rows.map(r => r.row_id),
+  }
+}
+
+/**
+ * 乗務員を選んだとき候補を期間に反映する。前の乗務員の候補 (印付き) は外し、
+ * 残りが無いか全部空なら候補で埋める。手入力の行があれば上書きしない。
+ */
+export function applyCandidates(rows: PeriodRow[], periods: IchibanCandidatePeriod[]): PeriodRow[] {
+  const rest = rows.filter(r => (r.ichiban_row_ids ?? []).length === 0)
+  if (rest.every(r => r.start_date === '' && r.end_date === '')) {
+    return periods.length > 0 ? periods.map(candidateToPeriodRow) : [newPeriodRow()]
+  }
+  return rest
+}
+
+/** 手で区分・日付・半日を変えた行は一番星の行から外す */
+export function clearIchibanMark(row: PeriodRow): PeriodRow {
+  const { ichiban_row_ids: _ids, ...rest } = row
+  return rest
 }
 
 /** 取得したページ (と期間) をフォームの初期値にする */

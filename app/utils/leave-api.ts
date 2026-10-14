@@ -34,6 +34,26 @@ export interface LeavePeriod {
   half: Half | null
 }
 
+/** 一番星の休暇の行 1 件 (どの行から期間を埋めたかを back へ返すための ID) */
+export interface IchibanCandidateRow {
+  row_id: string
+  day: string
+  item_name: string
+}
+
+/** 一番星の行を連続する日でまとめた期間の候補 */
+export interface IchibanCandidatePeriod {
+  kind: PeriodKind
+  start_date: string
+  end_date: string
+  half: Half | null
+  rows: IchibanCandidateRow[]
+}
+
+export interface CandidatesResponse {
+  periods: IchibanCandidatePeriod[]
+}
+
 export interface LeavePageDetail extends LeavePage {
   periods: LeavePeriod[]
 }
@@ -43,6 +63,8 @@ export interface PageUpdateBody {
   status: PageStatus
   note: string | null
   periods: LeavePeriod[]
+  /** 期間を埋めた一番星の行 ID (空なら省略) */
+  ichiban_row_ids?: string[]
 }
 
 /** 一番星の社員 (back が tenant の部門で絞った行) */
@@ -371,6 +393,9 @@ export function createLeaveApi(fetcher: Fetcher) {
     async listAlerts(): Promise<LeaveAlert[]> {
       const r = await fetcher<{ alerts: LeaveAlert[] }>(`${API_BASE}/leave/alerts`)
       return r.alerts
+    },
+    getCandidates(id: string, employeeCd: string): Promise<CandidatesResponse> {
+      return fetcher<CandidatesResponse>(`${pageUrl(id)}/candidates`, { query: { employee_cd: employeeCd } })
     },
     getCalendar(employeeCd: string, month: string): Promise<CalendarResponse> {
       return fetcher<CalendarResponse>(`${API_BASE}/leave/calendar`, {
