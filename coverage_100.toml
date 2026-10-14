@@ -13,6 +13,10 @@ path = "app/utils/leave-api.ts"
 branches = true
 
 [[files]]
+path = "app/utils/ledger-year.ts"
+branches = true
+
+[[files]]
 path = "app/utils/leave-periods.ts"
 branches = true
 

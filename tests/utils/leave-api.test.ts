@@ -231,6 +231,18 @@ describe('カレンダーと付与台帳', () => {
     })
   })
 
+  it('getLedger は as_of があれば query で渡し、無ければ空の query', async () => {
+    const { fetcher, calls } = fakeFetcher({ data: [] })
+    const api = createLeaveApi(fetcher)
+    await api.getLedger('2026-10-14')
+    await api.getLedger()
+    expect(calls[0]).toEqual({
+      url: '/api/proxy/api/leave/ledger',
+      options: { query: { as_of: '2026-10-14' } },
+    })
+    expect(calls[1]).toEqual({ url: '/api/proxy/api/leave/ledger', options: { query: {} } })
+  })
+
   it('getCandidates は pages/{id}/candidates に employee_cd を query で渡す', async () => {
     const { fetcher, calls } = fakeFetcher({ periods: [] })
     const r = await createLeaveApi(fetcher).getCandidates('p1', '101')
