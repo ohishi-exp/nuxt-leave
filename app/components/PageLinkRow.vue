@@ -63,8 +63,9 @@ watch(() => [props.page, props.periods], () => {
   // 作り直しで employee_cd が変わる分は、乗務員を選んだ操作ではないので候補を引かない
   if (next.employee_cd !== form.value.employee_cd) syncedCd = next.employee_cd
   form.value = next
-  // 取得済みの候補があれば、保存済みと同じ候補をチェックし直す (開いた直後を dirty にしない)
-  checked.value = initialCheckedKeys(candidates.value, props.periods)
+  // 取得済みの候補があれば、保存済みと同じ候補をチェックし直す (開いた直後を dirty にしない)。
+  // 期間が空 (対象外・未紐づけに戻した直後) はチェックを全部外す
+  checked.value = props.periods.length > 0 ? initialCheckedKeys(candidates.value, props.periods) : []
   initial.value = { ...next, checked: [...checked.value] }
 })
 
