@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { AuthToolbar } from '@ippoan/auth-client'
+
 const route = useRoute()
 
 const links = [
@@ -19,9 +21,9 @@ function isActive(to: string): boolean {
 <template>
   <div class="min-h-screen bg-(--ui-bg-muted)">
     <header class="border-b border-(--ui-border) bg-(--ui-bg)">
-      <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <NuxtLink to="/" class="font-bold">休暇申請の紐づけ</NuxtLink>
-        <nav class="flex gap-1">
+        <nav class="flex flex-wrap gap-1">
           <UButton
             v-for="l in links"
             :key="l.to"
@@ -33,6 +35,7 @@ function isActive(to: string): boolean {
             size="sm"
           />
         </nav>
+        <AuthToolbar :show-copy-url="false" :show-qr="false" class="ml-auto" />
       </div>
     </header>
     <main class="mx-auto max-w-7xl px-4 py-6">
