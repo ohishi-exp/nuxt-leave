@@ -22,4 +22,4 @@
 - wrangler.toml の named env は binding を継承しない → env ごとに再宣言。`[secrets] required = []` も各 env で
 - Secrets Store binding 名に `NUXT_PUBLIC_` を付けない (起動時 crash)
 - `.ippoan-dev.yaml` は置かない (dev-proxy の registry 未登録だと CI が落ちる)
-- merge = 本番 (auto-merge + auto tag)。back と auth-worker の振り分けが本番に出る前に merge しない
+- merge (auto-merge) で出るのは staging まで (本番には出ない)。本番は Tag Release (workflow_dispatch、入力なし) を手で打つ。back と auth-worker の振り分けが本番に出る前に Tag Release しない
