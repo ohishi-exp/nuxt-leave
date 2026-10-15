@@ -11,7 +11,7 @@ export default defineNuxtPlugin({
   name: 'auth',
   enforce: 'pre',
   setup() {
-    // ?lw= の処理は使わない (この画面は LINE WORKS から開かない)。
-    initAuthSession({ lineWorksParam: false })
+    // ?lw=<ドメイン> の LINE WORKS 自動ログインも有効 (休暇申請ロールの人は LINE WORKS で入ることが多い)。
+    initAuthSession()
   },
 })
