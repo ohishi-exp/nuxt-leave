@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { errorMessage, errorStatus, isForbidden, type BotConfig, type Department, type LineworksChannel, type NotifyRecipient } from '~/utils/leave-api'
+import { ADMIN_ONLY_MESSAGE, adminErrorMessage, errorStatus, isForbidden, type BotConfig, type Department, type LineworksChannel, type NotifyRecipient } from '~/utils/leave-api'
 import {
   DEFAULT_GRACE_DAYS,
   GRACE_DAYS_MAX,
@@ -94,7 +94,7 @@ async function loadSettings() {
   }
   catch (e) {
     forbidden.value = isForbidden(e)
-    error.value = errorMessage(e)
+    error.value = adminErrorMessage(e)
   }
   finally {
     loading.value = false
@@ -106,7 +106,7 @@ async function loadDepartments() {
     departments.value = await api.listDepartments()
   }
   catch (e) {
-    departmentsError.value = errorMessage(e)
+    departmentsError.value = adminErrorMessage(e)
   }
 }
 
@@ -119,7 +119,7 @@ async function loadLineworks() {
     recipients.value = lineworksRecipients(r)
   }
   catch (e) {
-    lineworksError.value = errorMessage(e)
+    lineworksError.value = adminErrorMessage(e)
   }
 }
 
@@ -130,7 +130,7 @@ async function loadCreds() {
   }
   catch (e) {
     credsForbidden.value = isForbidden(e)
-    credsError.value = errorMessage(e)
+    credsError.value = adminErrorMessage(e)
   }
 }
 
@@ -146,7 +146,7 @@ async function issueCred() {
   }
   catch (e) {
     credsForbidden.value = isForbidden(e)
-    credLabelError.value = errorMessage(e)
+    credLabelError.value = adminErrorMessage(e)
   }
   finally {
     credIssuing.value = false
@@ -165,7 +165,7 @@ async function revokeCred(c: MachineCredential) {
     await loadCreds()
   }
   catch (e) {
-    credsError.value = errorMessage(e)
+    credsError.value = adminErrorMessage(e)
   }
 }
 
@@ -180,7 +180,7 @@ async function rotateCred(c: MachineCredential) {
     await loadCreds()
   }
   catch (e) {
-    credsError.value = errorStatus(e) === 404 ? 'この資格情報は失効しているか見つかりません' : errorMessage(e)
+    credsError.value = errorStatus(e) === 404 ? 'この資格情報は失効しているか見つかりません' : adminErrorMessage(e)
   }
   finally {
     rotatingUsername.value = ''
@@ -206,7 +206,7 @@ async function save() {
     toast.add({ title: '設定を保存しました', color: 'success' })
   }
   catch (e) {
-    formErrors.value = [errorMessage(e)]
+    formErrors.value = [adminErrorMessage(e)]
   }
   finally {
     saving.value = false
@@ -222,7 +222,7 @@ async function sendTest() {
     testResult.value = { ok: true, message: '送りました。LINE WORKS を確認してください' }
   }
   catch (e) {
-    testResult.value = { ok: false, message: errorMessage(e) }
+    testResult.value = { ok: false, message: adminErrorMessage(e) }
   }
   finally {
     testing.value = false
@@ -246,7 +246,7 @@ async function saveBot() {
     await loadLineworks()
   }
   catch (e) {
-    botErrors.value = [errorMessage(e)]
+    botErrors.value = [adminErrorMessage(e)]
   }
   finally {
     botSaving.value = false
@@ -260,7 +260,7 @@ async function removeBot(b: BotConfig) {
     await loadLineworks()
   }
   catch (e) {
-    lineworksError.value = errorMessage(e)
+    lineworksError.value = adminErrorMessage(e)
   }
 }
 
@@ -420,7 +420,7 @@ onMounted(() => {
 
       <UCard>
         <template #header><h2 class="font-bold">スキャン送信用の資格情報</h2></template>
-        <div v-if="credsForbidden" class="text-sm text-(--ui-text-muted)">管理者だけが操作できます</div>
+        <div v-if="credsForbidden" class="text-sm text-(--ui-text-muted)">{{ ADMIN_ONLY_MESSAGE }}</div>
         <div v-else class="space-y-4">
           <p class="text-sm text-(--ui-text-muted)">
             複合機や PC が申請書の PDF を WebDAV で送るときのユーザー名とパスワードです。

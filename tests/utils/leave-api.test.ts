@@ -4,7 +4,10 @@ import {
   createLeaveApi,
   errorMessage,
   errorStatus,
-  FORBIDDEN_MESSAGE,
+  ADMIN_ONLY_MESSAGE,
+  NO_PERMISSION_MESSAGE,
+  adminErrorMessage,
+  forbiddenKind,
   isForbidden,
   listDocumentsQuery,
   listPagesQuery,
@@ -141,10 +144,18 @@ describe('エラーの文', () => {
     expect(errorStatus('x')).toBeUndefined()
   })
 
-  it('403 は管理者だけの文', () => {
+  it('403 は 2 種の文', () => {
     expect(isForbidden({ status: 403 })).toBe(true)
     expect(isForbidden({ status: 400 })).toBe(false)
-    expect(errorMessage({ statusCode: 403, data: { error: 'forbidden' } })).toBe(FORBIDDEN_MESSAGE)
+    expect(forbiddenKind({ status: 403, data: { error: 'admin_only' } })).toBe('admin_only')
+    expect(forbiddenKind({ status: 403, data: { error: 'forbidden' } })).toBe('no_permission')
+    expect(forbiddenKind({ status: 403 })).toBe('no_permission')
+    expect(forbiddenKind({ status: 403, data: { error: 'x' } })).toBe('no_permission')
+    expect(forbiddenKind({ status: 400, data: { error: 'admin_only' } })).toBeNull()
+    expect(errorMessage({ statusCode: 403, data: { error: 'admin_only' } })).toBe(ADMIN_ONLY_MESSAGE)
+    expect(errorMessage({ statusCode: 403, data: { error: 'forbidden' } })).toBe(NO_PERMISSION_MESSAGE)
+    expect(adminErrorMessage({ status: 403, data: { error: 'forbidden' } })).toBe(ADMIN_ONLY_MESSAGE)
+    expect(adminErrorMessage({ status: 400, data: { error: 'not_found' } })).toBe('見つかりません')
   })
 
   it('既知の語は日本語、知らない語はそのまま', () => {

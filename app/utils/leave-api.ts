@@ -537,7 +537,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   ingest_failed: '取り込みに失敗しました。少し待ってからやり直してください',
 }
 
-export const FORBIDDEN_MESSAGE = 'この画面は管理者だけが使えます'
+export const ADMIN_ONLY_MESSAGE = 'この操作は管理者だけが使えます'
+export const NO_PERMISSION_MESSAGE = 'この画面を使うには休暇申請の権限が要ります。管理者に依頼してください'
 
 interface FetchErrorLike {
   status?: number
@@ -556,9 +557,25 @@ export function isForbidden(e: unknown): boolean {
   return errorStatus(e) === 403
 }
 
-/** fetch のエラーを画面に出す 1 文にする (403 は管理者でない旨、既知の語は日本語) */
+/**
+ * 403 の種類。back は `{"error":"admin_only"}` (管理者だけの操作) と
+ * `{"error":"forbidden"}` (休暇申請の権限なし) を返す。本文が無い・知らない値は no_permission。
+ */
+export function forbiddenKind(e: unknown): 'admin_only' | 'no_permission' | null {
+  if (!isForbidden(e)) return null
+  const code = (e as FetchErrorLike).data?.error
+  return code === 'admin_only' ? 'admin_only' : 'no_permission'
+}
+
+/** 管理者だけの操作 (設定・資格情報) の画面用。403 は種類によらず管理者だけの文 */
+export function adminErrorMessage(e: unknown): string {
+  return isForbidden(e) ? ADMIN_ONLY_MESSAGE : errorMessage(e)
+}
+
+/** fetch のエラーを画面に出す 1 文にする (403 は 2 種の文、既知の語は日本語) */
 export function errorMessage(e: unknown): string {
-  if (isForbidden(e)) return FORBIDDEN_MESSAGE
+  const kind = forbiddenKind(e)
+  if (kind) return kind === 'admin_only' ? ADMIN_ONLY_MESSAGE : NO_PERMISSION_MESSAGE
   // 413 は本文が JSON でない (back の body 上限)
   if (errorStatus(e) === 413) return TOO_LARGE_MESSAGE
   if (!e || typeof e !== 'object') return String(e)

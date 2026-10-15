@@ -1,7 +1,7 @@
 # nuxt-leave
 
 休暇申請書 (有給・労災・特別休暇・欠勤) の PDF を 1 ページずつ乗務員と期間に紐づける管理画面。
-親: ohishi-exp/rust-leave-worker#1。back は rust-leave-worker の `/api/leave/*`。
+親: ohishi-exp/rust-leave-worker#1。back は rust-leave-worker の `/api/leave/*` (admin と休暇申請ロール = 権限 leave.use を back が判定。403 は `admin_only` / `forbidden` の 2 種)。
 
 ## 構成
 - Nuxt 4 + @nuxt/ui、SPA (`ssr: false`)、Cloudflare Workers (`cloudflare_module`)
