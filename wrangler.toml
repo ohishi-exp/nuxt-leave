@@ -39,7 +39,7 @@ binding = "AUTH_MCRED"
 service = "auth-worker"
 entrypoint = "MachineCredentialEntrypoint"
 
-# /dav/** が受けた PDF の置き場。R2 通知 → Queue → rust-leave-worker が取り込む。
+# /dav/** が受けた PDF の置き場。rust-leave-worker が一覧を開いたときに inbox を拾って取り込む。
 [[r2_buckets]]
 binding = "LEAVE_INBOX"
 bucket_name = "leave-inbox"

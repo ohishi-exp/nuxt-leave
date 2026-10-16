@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   candidateKey,
+  defaultSearchRange,
+  SEARCH_RANGE_ERROR,
+  validateSearchRange,
   initialCheckedKeys,
   isRowDirty,
   kindLabel,
@@ -191,5 +194,27 @@ describe('行の変更判定とボタン', () => {
     expect(rowButtons('ignored', true)).toEqual(['relink', 'unlink'])
     expect(rowButtons('linked', false)).toEqual(['unlink'])
     expect(rowButtons('ignored', false)).toEqual(['unlink'])
+  })
+})
+
+describe('探す期間', () => {
+  it('初期値は基準日の前後 7 日 (月またぎも)、読めない基準日は空', () => {
+    expect(defaultSearchRange('2026-09-10')).toEqual({ from: '2026-09-03', to: '2026-09-17' })
+    expect(defaultSearchRange('2026-10-02', 3)).toEqual({ from: '2026-09-29', to: '2026-10-05' })
+    expect(defaultSearchRange('')).toEqual({ from: '', to: '' })
+  })
+
+  it('両端を含めて 92 日までは通る (1 日・91 日・92 日)', () => {
+    expect(validateSearchRange('2026-09-01', '2026-09-01')).toBeNull()
+    expect(validateSearchRange('2026-09-01', '2026-11-30')).toBeNull()
+    expect(validateSearchRange('2026-09-01', '2026-12-01')).toBeNull()
+  })
+
+  it('93 日・逆順・空・存在しない日は弾く', () => {
+    expect(validateSearchRange('2026-09-01', '2026-12-02')).toBe(SEARCH_RANGE_ERROR)
+    expect(validateSearchRange('2026-09-02', '2026-09-01')).toBe(SEARCH_RANGE_ERROR)
+    expect(validateSearchRange('', '2026-09-01')).toBe(SEARCH_RANGE_ERROR)
+    expect(validateSearchRange('2026-09-01', '')).toBe(SEARCH_RANGE_ERROR)
+    expect(validateSearchRange('2026-02-30', '2026-03-01')).toBe(SEARCH_RANGE_ERROR)
   })
 })

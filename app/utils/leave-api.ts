@@ -416,8 +416,8 @@ export function createLeaveApi(fetcher: Fetcher) {
       const r = await fetcher<{ alerts: LeaveAlert[], from?: string, to?: string }>(`${API_BASE}/leave/alerts`)
       return { alerts: r.alerts, from: r.from, to: r.to }
     },
-    getCandidates(id: string, employeeCd: string): Promise<CandidatesResponse> {
-      return fetcher<CandidatesResponse>(`${pageUrl(id)}/candidates`, { query: { employee_cd: employeeCd } })
+    getCandidates(id: string, employeeCd: string, range?: { from: string, to: string }): Promise<CandidatesResponse> {
+      return fetcher<CandidatesResponse>(`${pageUrl(id)}/candidates`, { query: range ? { employee_cd: employeeCd, ...range } : { employee_cd: employeeCd } })
     },
     setBaseDate(id: string, baseDate: string | null): Promise<{ base_date: string | null, updated: number }> {
       return fetcher<{ base_date: string | null, updated: number }>(`${pageUrl(id)}/base-date`, {
@@ -494,6 +494,7 @@ const TOO_LARGE_MESSAGE = '10MB を超えています'
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_body: '入力が正しくありません',
   invalid_query: '一覧の条件が正しくありません',
+  invalid_range: '探す期間は、開始日 ≤ 終了日・92 日以内で入れてください',
   invalid_status: '状態の値が正しくありません',
   invalid_kind: '区分の値が正しくありません',
   invalid_half: '半日の値が正しくありません',

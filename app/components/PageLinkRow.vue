@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import type { Employee, IchibanCandidatePeriod, LeavePage, LeavePeriod, PageStatus } from '~/utils/leave-api'
+import { errorMessage, type Employee, type IchibanCandidatePeriod, type LeavePage, type LeavePeriod, type PageStatus } from '~/utils/leave-api'
 import {
   candidateKey,
+  defaultSearchRange,
   initialCheckedKeys,
   isRowDirty,
   periodLabel,
@@ -11,9 +12,10 @@ import {
   selectedPeriods,
   unmatchedSaved,
   validateLinkForm,
+  validateSearchRange,
   type LinkForm,
 } from '~/utils/leave-periods'
-import { statusLabel } from '~/utils/pages-list'
+import { effectiveBaseDate, statusLabel } from '~/utils/pages-list'
 
 /** 全ページ連続入力の 1 行 (縮小画像 + 紐づけフォーム)。保存は親が行う。 */
 const props = defineProps<{
@@ -50,6 +52,11 @@ const candidateNotice = ref('')
 /** 一番星の候補 (乗務員の欄の下に並べ、チェックしたものが期間になる) */
 const candidates = ref<IchibanCandidatePeriod[]>([])
 const checked = ref<string[]>([])
+/** 乗務員を選んだが窓の中に候補が無い (期間を指定して探し直せる) */
+const noCandidates = ref(false)
+const searchFrom = ref('')
+const searchTo = ref('')
+const searching = ref(false)
 /** 行を開いたとき (props から form を作り直したとき) の値。ボタンの出し分けの基準 */
 const initial = ref({ ...form.value, checked: [] as string[] })
 const buttons = computed(() => rowButtons(
@@ -73,9 +80,9 @@ watch(() => [props.page, props.periods], () => {
 const savedOnly = computed(() => unmatchedSaved(candidates.value, props.periods))
 
 /** 乗務員を選んだら一番星の候補を引く。1 つだけなら最初からチェックし、2 つ以上は選んでもらう */
-async function fetchCandidates(cd: string, focus = true) {
+async function fetchCandidates(cd: string, focus = true, range?: { from: string, to: string }) {
   try {
-    const res = await api.getCandidates(props.page.id, cd)
+    const res = await api.getCandidates(props.page.id, cd, range)
     if (form.value.employee_cd !== cd) return
     candidates.value = res.periods
     checked.value = initialCheckedKeys(res.periods, props.periods)
@@ -83,19 +90,43 @@ async function fetchCandidates(cd: string, focus = true) {
     if (cd === initial.value.employee_cd) initial.value = { ...initial.value, checked: [...checked.value] }
     if (res.periods.length === 0) {
       // 保存済みの期間があるときは、候補の窓の外でも案内しない (保存済みは別に出る)
-      if (props.periods.length === 0) candidateNotice.value = '一番星に記録がありません。一番星に記録を足してから選んでください'
+      if (props.periods.length === 0) {
+        noCandidates.value = true
+        if (!searchFrom.value && !searchTo.value) {
+          const d = defaultSearchRange(effectiveBaseDate(props.page))
+          searchFrom.value = d.from
+          searchTo.value = d.to
+        }
+        candidateNotice.value = range
+          ? 'この期間にも一番星の記録がありません'
+          : '一番星に記録がありません。一番星に記録を足してから選んでください (期間を指定して探し直せます)'
+      }
       return
     }
+    noCandidates.value = false
     // 乗務員を確定して候補が返ったら、キーボードだけで続けられるよう候補一覧へフォーカスを移す
     // (基準日が変わった引き直しでは動かさない)
     if (!focus) return
     await nextTick()
     focusCandidates()
   }
-  catch {
+  catch (e) {
     if (form.value.employee_cd !== cd) return
-    candidateNotice.value = '一番星を読めませんでした'
+    candidateNotice.value = range ? errorMessage(e) : '一番星を読めませんでした'
   }
+}
+
+/** 候補が 0 件のとき、入れた期間で探し直す (チェックの初期規則は乗務員を選んだときと同じ) */
+async function searchRange() {
+  const msg = validateSearchRange(searchFrom.value, searchTo.value)
+  if (msg) {
+    candidateNotice.value = msg
+    return
+  }
+  candidateNotice.value = ''
+  searching.value = true
+  await fetchCandidates(form.value.employee_cd, true, { from: searchFrom.value, to: searchTo.value })
+  searching.value = false
 }
 
 // 乗務員を選び直したら一番星の候補を取り直す。
@@ -109,6 +140,9 @@ watch(() => form.value.employee_cd, async (cd, old) => {
   candidateNotice.value = ''
   candidates.value = []
   checked.value = []
+  noCandidates.value = false
+  searchFrom.value = ''
+  searchTo.value = ''
   if (cd === syncedCd) {
     syncedCd = null
     return
@@ -252,6 +286,15 @@ defineExpose({ focusEmployee, scrollHere })
           size="xs"
           @click="fetchCandidates(form.employee_cd)"
         />
+        <div v-if="noCandidates && candidates.length === 0" class="flex flex-wrap items-end gap-2" data-search-range>
+          <UFormField label="開始日">
+            <input v-model="searchFrom" type="date" class="rounded border border-(--ui-border) px-2 py-1 text-sm" @keydown.enter.prevent="!$event.isComposing && searchRange()">
+          </UFormField>
+          <UFormField label="終了日">
+            <input v-model="searchTo" type="date" class="rounded border border-(--ui-border) px-2 py-1 text-sm" @keydown.enter.prevent="!$event.isComposing && searchRange()">
+          </UFormField>
+          <UButton label="この期間で探す" icon="i-lucide-search" color="neutral" variant="outline" size="xs" :loading="searching" @click="searchRange" />
+        </div>
         <p v-if="form.employee_cd === ''" class="text-xs text-(--ui-text-muted)">乗務員を選ぶと一番星の候補が出ます</p>
       </div>
 

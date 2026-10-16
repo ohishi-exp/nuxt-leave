@@ -3,6 +3,7 @@
  * 期間は手で入れず、一番星の候補からチェックして選ぶ。
  * 規則は back (rust-leave-worker の pages.rs) と同じ: linked は乗務員と期間 1 行以上が必須。
  */
+import { isDate } from './grants'
 import type { Half, IchibanCandidatePeriod, LeavePeriod, PageStatus, PageUpdateBody, PeriodKind } from './leave-api'
 
 export const PERIOD_KINDS: { value: PeriodKind, label: string }[] = [
@@ -153,4 +154,26 @@ export type RowButton = 'link' | 'relink' | 'ignore' | 'unlink'
 export function rowButtons(status: PageStatus, dirty: boolean): RowButton[] {
   if (status === 'unlinked') return ['link', 'ignore']
   return dirty ? ['relink', 'unlink'] : ['unlink']
+}
+
+/** 探す期間の幅の上限 (両端を含む日数)。back の reconcile::DAYS_MAX_SPAN と同じ */
+export const SEARCH_RANGE_MAX_DAYS = 92
+
+export const SEARCH_RANGE_ERROR = `開始日と終了日を、開始日 ≤ 終了日・${SEARCH_RANGE_MAX_DAYS} 日以内で入れてください`
+
+const DAY_MS = 86_400_000
+
+/** 基準日の前後 `margin` 日 (候補の窓の初期値)。基準日が読めなければ空の期間 */
+export function defaultSearchRange(baseDate: string, margin = 7): { from: string, to: string } {
+  if (!isDate(baseDate)) return { from: '', to: '' }
+  const t = Date.parse(`${baseDate}T00:00:00Z`)
+  const day = (n: number) => new Date(t + n * DAY_MS).toISOString().slice(0, 10)
+  return { from: day(-margin), to: day(margin) }
+}
+
+/** 探す期間の入力の確かめ: 両方が実在の日・開始 ≤ 終了・両端を含めて 92 日以内。OK なら null、ダメなら文 */
+export function validateSearchRange(from: string, to: string): string | null {
+  if (!isDate(from) || !isDate(to) || from > to) return SEARCH_RANGE_ERROR
+  const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS + 1
+  return days > SEARCH_RANGE_MAX_DAYS ? SEARCH_RANGE_ERROR : null
 }
