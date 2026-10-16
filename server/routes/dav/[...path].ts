@@ -2,7 +2,7 @@
  * 複合機の WebDAV 送信を受ける /dav/**。判定は server/utils/dav.ts。
  * auth-worker の `/m/leave-scan/**` からの中継 (X-Internal-Shared-Secret 付き) だけを処理し、それ以外は 404。
  * PUT の PDF は auth-worker の RPC でチケットを貰い、R2 (LEAVE_INBOX) に置く。
- * 取り込みは R2 通知 → Queue → rust-leave-worker。
+ * 取り込みは rust-leave-worker が一覧を開いたときに inbox を拾う。
  */
 import { defineEventHandler, getRequestURL, setResponseHeaders, setResponseStatus, toWebRequest } from 'h3'
 import { cfEnv, resolveSecret } from '../../utils/cf-env'

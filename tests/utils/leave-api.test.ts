@@ -194,6 +194,7 @@ describe('エラーの文', () => {
 
   it('期首残のエラー語', () => {
     const msg = (c: string) => errorMessage({ status: 400, data: { error: c } })
+    expect(msg('invalid_range')).toBe('探す期間は、開始日 ≤ 終了日・92 日以内で入れてください')
     expect(msg('invalid_as_of')).toBe('期首日が正しくありません')
     expect(msg('invalid_body')).toBe('入力が正しくありません')
     expect(msg('too_many_rows')).toBe('一度に保存できるのは 1000 人までです')
@@ -262,6 +263,12 @@ describe('カレンダーと付与台帳', () => {
       url: '/api/proxy/api/leave/pages/p1/candidates',
       options: { query: { employee_cd: '101' } },
     })
+  })
+
+  it('getCandidates は range があれば from / to も query に足す', async () => {
+    const { fetcher, calls } = fakeFetcher({ periods: [] })
+    await createLeaveApi(fetcher).getCandidates('p1', '101', { from: '2026-09-01', to: '2026-09-30' })
+    expect(calls[0]!.options).toEqual({ query: { employee_cd: '101', from: '2026-09-01', to: '2026-09-30' } })
   })
 
   it('setBaseDate は pages/{id}/base-date へ PUT する (null で解除)', async () => {
