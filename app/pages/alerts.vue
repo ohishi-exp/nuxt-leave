@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { errorMessage, isForbidden, type Employee, type LeaveAlert } from '~/utils/leave-api'
-import { groupAlerts } from '~/utils/leave-alerts'
+import { groupAlerts, notifyAlertsMessage } from '~/utils/leave-alerts'
 
 const api = useLeaveApi()
+const toast = useToast()
 
 const alerts = ref<LeaveAlert[]>([])
 const range = ref('直近〜昨日')
@@ -36,6 +37,23 @@ async function load() {
   }
 }
 
+/** 今の漏れを通知先へ送る (毎朝と同じ文面。管理者だけ)。送ったら一覧を読み直す */
+const sending = ref(false)
+async function sendNow() {
+  sending.value = true
+  try {
+    const r = await api.notifyAlerts()
+    toast.add({ title: notifyAlertsMessage(r), color: 'success' })
+    await load()
+  }
+  catch (e) {
+    toast.add({ title: errorMessage(e), color: 'error' })
+  }
+  finally {
+    sending.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -48,7 +66,19 @@ onMounted(load)
     <p v-else-if="loading" class="text-sm text-(--ui-text-muted)">読み込み中…</p>
 
     <template v-else>
-      <p class="text-sm">未解消の漏れ: {{ alerts.length }} 件 ({{ range }})</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <p class="text-sm">未解消の漏れ: {{ alerts.length }} 件 ({{ range }})</p>
+        <UButton
+          icon="i-lucide-send"
+          label="今の漏れを通知先へ送る"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          :loading="sending"
+          :disabled="alerts.length === 0"
+          @click="sendNow"
+        />
+      </div>
       <p v-if="alerts.length === 0" class="text-sm text-(--ui-text-muted)">未解消の漏れはありません</p>
 
       <section
