@@ -3,6 +3,7 @@
  *
  * - `/api/leave/*` は rust-leave-worker (auth-worker `/alc-proxy` 経由)
  * - `/api/admin/bot/configs`・`/api/notify/lineworks/channels`・`/api/notify/recipients` は rust-alc-api の既存の口
+ * - `/api/lineworks/webhook-url` は auth-worker 自身が答える (bot の callback URL の path。tenant を暗号化した識別子入り)
  *
  * 画面からは `/api/proxy/api/...` を叩く (server/api/proxy が auth-worker に渡す)。
  * fetch の実体は引数で受ける (画面は $fetch、テストは偽物)。
@@ -473,6 +474,11 @@ export function createLeaveApi(fetcher: Fetcher) {
     },
     deleteBotConfig(id: string): Promise<unknown> {
       return fetcher(botConfigUrl(id), { method: 'DELETE' })
+    },
+    /** bot の callback URL の path (`/lineworks/hook/{識別子}`) */
+    async botWebhookPath(botId: string): Promise<string> {
+      const r = await fetcher<{ path: string }>(`${API_BASE}/lineworks/webhook-url?bot_id=${encodeURIComponent(botId)}`)
+      return r.path
     },
     testNotify(): Promise<unknown> {
       return fetcher(`${API_BASE}/leave/settings/test-notify`, { method: 'POST' })

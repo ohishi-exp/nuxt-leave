@@ -75,9 +75,12 @@ export function toBotConfigBody(f: BotForm): BotConfigBody {
   return body
 }
 
-/** LINE WORKS の Developer Console に入れる callback URL (auth-worker が受ける) */
-export function botWebhookUrl(authWorkerUrl: string, botId: string): string {
-  return `${authWorkerUrl.replace(/\/$/, '')}/lineworks/webhook/${encodeURIComponent(botId)}`
+/**
+ * LINE WORKS の Developer Console に入れる callback URL (auth-worker が受ける)。
+ * path は auth-worker の `/api/lineworks/webhook-url` が返す `/lineworks/hook/{識別子}` (tenant を URL に直接出さない)
+ */
+export function botWebhookUrl(authWorkerUrl: string, path: string): string {
+  return `${authWorkerUrl.replace(/\/$/, '')}${path}`
 }
 
 /** 通知先グループの選択肢 (title が無ければ channel_id) */
