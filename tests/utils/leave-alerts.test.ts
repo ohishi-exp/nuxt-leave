@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { directionLabel, formatAlertDay, groupAlerts } from '~/utils/leave-alerts'
+import { directionLabel, formatAlertDay, groupAlerts, notifyAlertsMessage } from '~/utils/leave-alerts'
 import type { LeaveAlert } from '~/utils/leave-api'
 
 const a = (employee_cd: string, day: string, kind: string, direction: LeaveAlert['direction'] = 'pdf_only'): LeaveAlert =>
@@ -30,5 +30,10 @@ describe('leave-alerts', () => {
   it('従業員が引けなければコードだけ・空なら空', () => {
     expect(groupAlerts([a('9', '2026-10-01', 'yukyu')], [])[0]!.label).toBe('9')
     expect(groupAlerts([], [])).toEqual([])
+  })
+
+  it('今すぐ送った結果の文', () => {
+    expect(notifyAlertsMessage({ sent_messages: 0, notified: 0 })).toBe('送る漏れはありません')
+    expect(notifyAlertsMessage({ sent_messages: 2, notified: 15 })).toBe('2 通送りました (漏れ 15 件)')
   })
 })

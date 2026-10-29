@@ -81,6 +81,12 @@ export interface Employee {
 
 export type AlertDirection = 'ichiban_only' | 'pdf_only'
 
+/** 漏れを今すぐ送った結果 (`POST /api/leave/alerts/notify`)。送った通数と、通知の時刻を付けた漏れの件数 */
+export interface NotifyAlertsResult {
+  sent_messages: number
+  notified: number
+}
+
 /** 未解消の漏れ 1 件 (`GET /api/leave/alerts`) */
 export interface LeaveAlert {
   employee_cd: string
@@ -482,6 +488,10 @@ export function createLeaveApi(fetcher: Fetcher) {
     },
     testNotify(): Promise<unknown> {
       return fetcher(`${API_BASE}/leave/settings/test-notify`, { method: 'POST' })
+    },
+    /** 未解消の漏れを今すぐ通知先へ送る (毎朝と同じ文面。管理者だけ) */
+    notifyAlerts(): Promise<NotifyAlertsResult> {
+      return fetcher<NotifyAlertsResult>(`${API_BASE}/leave/alerts/notify`, { method: 'POST' })
     },
     listChannels(): Promise<LineworksChannel[]> {
       return fetcher<LineworksChannel[]>(`${API_BASE}/notify/lineworks/channels`)

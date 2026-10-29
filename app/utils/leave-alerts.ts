@@ -2,7 +2,7 @@
  * 「漏れ」(一番星と申請書の食い違い) 画面の表示用の変換。
  * 方向の言葉は back (rust-leave-worker reconcile.rs:320-322) の通知の文面と同じものを TS 側に写している。
  */
-import type { AlertDirection, Employee, LeaveAlert } from './leave-api'
+import type { AlertDirection, Employee, LeaveAlert, NotifyAlertsResult } from './leave-api'
 import { kindLabel } from './leave-periods'
 import { WEEKDAYS } from './calendar'
 import { employeeLabelByCode } from './employees'
@@ -61,4 +61,10 @@ export function groupAlerts(alerts: LeaveAlert[], employees: Employee[]): AlertG
           })),
       }
     })
+}
+
+/** 漏れを今すぐ送った結果の 1 文 */
+export function notifyAlertsMessage(r: NotifyAlertsResult): string {
+  if (r.sent_messages === 0) return '送る漏れはありません'
+  return `${r.sent_messages} 通送りました (漏れ ${r.notified} 件)`
 }

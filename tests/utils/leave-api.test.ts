@@ -102,6 +102,12 @@ describe('createLeaveApi', () => {
     ])
   })
 
+  it('notifyAlerts は body 無しの POST', async () => {
+    const { fetcher, calls } = fakeFetcher({ sent_messages: 1, notified: 3 })
+    expect(await createLeaveApi(fetcher).notifyAlerts()).toEqual({ sent_messages: 1, notified: 3 })
+    expect(calls[0]).toEqual({ url: '/api/proxy/api/leave/alerts/notify', options: { method: 'POST' } })
+  })
+
   it('testNotify は body 無しの POST', async () => {
     const { fetcher, calls } = fakeFetcher({})
     await createLeaveApi(fetcher).testNotify()
