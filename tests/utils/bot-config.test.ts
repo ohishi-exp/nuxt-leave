@@ -99,8 +99,8 @@ describe('body に鍵を載せない', () => {
 
 describe('表示', () => {
   it('webhook URL は末尾の / を重ねない', () => {
-    expect(botWebhookUrl('https://auth.example/', '123')).toBe('https://auth.example/lineworks/webhook/123')
-    expect(botWebhookUrl('https://auth.example', 'a b')).toBe('https://auth.example/lineworks/webhook/a%20b')
+    expect(botWebhookUrl('https://auth.example/', '/lineworks/hook/abc_-1')).toBe('https://auth.example/lineworks/hook/abc_-1')
+    expect(botWebhookUrl('https://auth.example', '/lineworks/hook/x')).toBe('https://auth.example/lineworks/hook/x')
   })
 
   it('グループ名が無ければ channel_id', () => {

@@ -133,6 +133,12 @@ describe('createLeaveApi', () => {
       { url: '/api/proxy/api/notify/recipients', options: undefined },
     ])
   })
+
+  it('bot の callback URL の path は auth-worker の webhook-url から', async () => {
+    const { fetcher, calls } = fakeFetcher({ path: '/lineworks/hook/abc' })
+    expect(await createLeaveApi(fetcher).botWebhookPath('13 33')).toBe('/lineworks/hook/abc')
+    expect(calls[0]).toEqual({ url: '/api/proxy/api/lineworks/webhook-url?bot_id=13%2033', options: undefined })
+  })
 })
 
 describe('エラーの文', () => {

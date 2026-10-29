@@ -54,6 +54,8 @@ const departments = ref<Department[]>([])
 const channels = ref<LineworksChannel[]>([])
 const recipients = ref<NotifyRecipient[]>([])
 const bots = ref<BotConfig[]>([])
+/** bot_id → callback URL の path (auth-worker が返す。取れなかった bot は入らない) */
+const webhookPaths = ref<Record<string, string>>({})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -120,7 +122,19 @@ async function loadLineworks() {
   }
   catch (e) {
     lineworksError.value = adminErrorMessage(e)
+    return
   }
+  // callback URL は bot ごとに auth-worker から取る (取れなければその bot の URL を出さない)
+  const paths: Record<string, string> = {}
+  await Promise.all(bots.value.map(async (b) => {
+    try {
+      paths[b.bot_id] = await api.botWebhookPath(b.bot_id)
+    }
+    catch {
+      // 出さないだけ
+    }
+  }))
+  webhookPaths.value = paths
 }
 
 async function loadCreds() {
@@ -336,11 +350,12 @@ onMounted(() => {
                 </span>
               </div>
               <div class="text-(--ui-text-muted)">Bot ID: {{ b.bot_id }} / Client ID: {{ b.client_id }} / Service Account: {{ b.service_account }}</div>
-              <div v-if="authWorkerUrl" class="flex items-center gap-1">
+              <div v-if="authWorkerUrl && webhookPaths[b.bot_id]" class="flex items-center gap-1">
                 <span class="text-(--ui-text-muted)">Callback URL:</span>
-                <code class="break-all">{{ botWebhookUrl(authWorkerUrl, b.bot_id) }}</code>
-                <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" aria-label="コピー" @click="copy(botWebhookUrl(authWorkerUrl, b.bot_id))" />
+                <code class="break-all">{{ botWebhookUrl(authWorkerUrl, webhookPaths[b.bot_id]!) }}</code>
+                <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" aria-label="コピー" @click="copy(botWebhookUrl(authWorkerUrl, webhookPaths[b.bot_id]!))" />
               </div>
+              <div v-else-if="authWorkerUrl" class="text-(--ui-text-muted)">Callback URL: 取得できませんでした</div>
             </div>
 
             <div v-if="botForm" class="space-y-3 rounded border border-(--ui-border) p-3">
