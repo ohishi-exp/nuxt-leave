@@ -23,6 +23,10 @@ jobs:
       # wrangler.toml が `[build] command = "npm run build"` を持つので、deploy script に
       # `npm run build` を重ねない (重ねると nuxt build が二重に走る)。
       deploy_staging_script: 'npx wrangler deploy --env staging'
+      # staging deploy 後に、この frontend が実際に呼ぶ staging の CF Worker の SHA を tested として
+      # ci-dashboard に報告する (Refs ippoan/ci-dashboard#520)。呼ぶ証拠のある worker だけを並べる。
+      # rust-leave-worker は staging の SHA を報告していないので並べない。
+      compat_staging_backends: 'ippoan/alc-lineworks-worker,ippoan/alc-notify-worker'
       deploy_release_script: 'npx wrangler deploy'
       # no-traffic (`wrangler versions upload` + flip) は **既存 Worker 前提**で、初回の
       # deploy をブートストラップできない ("You cannot upload a new version of a Worker that
