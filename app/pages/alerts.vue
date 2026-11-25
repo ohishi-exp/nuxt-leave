@@ -93,6 +93,19 @@ onMounted(load)
               <td class="whitespace-nowrap px-3 py-1.5">{{ r.dayLabel }}</td>
               <td class="px-3 py-1.5">{{ r.kindLabel }}</td>
               <td class="px-3 py-1.5">{{ r.directionLabel }}</td>
+              <td class="whitespace-nowrap px-3 py-1.5 text-right">
+                <span v-if="r.pageIds.length === 0" class="text-(--ui-text-muted)">PDF なし</span>
+                <UButton
+                  v-for="(id, j) in r.pageIds"
+                  :key="id"
+                  :to="`/pages/${id}`"
+                  icon="i-lucide-file-text"
+                  :label="r.pageIds.length > 1 ? `PDF ${j + 1}` : 'PDF'"
+                  size="xs"
+                  color="neutral"
+                  variant="link"
+                />
+              </td>
             </tr>
           </tbody>
         </table>

@@ -95,6 +95,8 @@ export interface LeaveAlert {
   direction: AlertDirection
   first_seen_at: string
   notified_at: string | null
+  /** 同じ乗務員の紐づけ済みページのうち、その日を期間に含むもの (区分は問わない。back が古ければ無い) */
+  page_ids?: string[]
 }
 
 export interface Department {

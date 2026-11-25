@@ -29,6 +29,8 @@ export interface AlertRow {
   dayLabel: string
   kindLabel: string
   directionLabel: string
+  /** その日を期間に含む紐づけ済みページ (PDF の確認用) */
+  pageIds: string[]
 }
 
 export interface AlertGroup {
@@ -58,6 +60,7 @@ export function groupAlerts(alerts: LeaveAlert[], employees: Employee[]): AlertG
             dayLabel: formatAlertDay(a.day),
             kindLabel: kindLabel(a.kind),
             directionLabel: directionLabel(a.direction),
+            pageIds: a.page_ids ?? [],
           })),
       }
     })
