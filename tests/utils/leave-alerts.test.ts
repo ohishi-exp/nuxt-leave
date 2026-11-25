@@ -27,6 +27,11 @@ describe('leave-alerts', () => {
     expect(g[0]!.rows[0]).toMatchObject({ dayLabel: '10/05 (月)', directionLabel: '申請書なし' })
   })
 
+  it('PDF のページ (無ければ空)', () => {
+    const g = groupAlerts([{ ...a('1', '2026-10-14', 'yukyu'), page_ids: ['p1', 'p2'] }, a('1', '2026-10-15', 'yukyu')], [])
+    expect(g[0]!.rows.map(r => r.pageIds)).toEqual([['p1', 'p2'], []])
+  })
+
   it('従業員が引けなければコードだけ・空なら空', () => {
     expect(groupAlerts([a('9', '2026-10-01', 'yukyu')], [])[0]!.label).toBe('9')
     expect(groupAlerts([], [])).toEqual([])
